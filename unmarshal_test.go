@@ -1535,3 +1535,34 @@ func TestUnmarshalEmbededStructs(t *testing.T) {
 	assert.Nil(t, err)
 	assert.JSONEq(t, expected, string(s))
 }
+
+func TestUnmarshalGoJSONTags(t *testing.T) {
+	t.Run("Mixed Tags", func(t *testing.T) {
+		type Example struct {
+			GoJSON        string `gojson:"gojson"`
+			Both          string `json:"both"`
+			Neither       string `json:"-" gojson:"-"`
+			OnlyUnmarshal string `json:"-" gojson:"only_unmarshal"`
+		}
+
+		var e Example
+		data := []byte(`{
+			"gojson": "Unmarshalled with gojson tag, marshaled with struct name",
+			"both": "Will be unmarshalled AND marshalled",
+			"neither": "Won't be unmarshalled or marshalled",
+			"only_unmarshal": "This should only be unmarshalled"
+		}`)
+
+		err := Unmarshal(data, &e)
+		assert.Nil(t, err)
+
+		assert.Equal(t, e.GoJSON, "Unmarshalled with gojson tag, marshaled with struct name")
+		assert.Equal(t, e.Both, "Will be unmarshalled AND marshalled")
+		assert.Equal(t, e.Neither, "")
+		assert.Equal(t, e.OnlyUnmarshal, "This should only be unmarshalled")
+
+		m, err := json.Marshal(e)
+		assert.Nil(t, err)
+		assert.JSONEq(t, `{ "both": "Will be unmarshalled AND marshalled", "GoJSON": "Unmarshalled with gojson tag, marshaled with struct name" }`, string(m))
+	})
+}

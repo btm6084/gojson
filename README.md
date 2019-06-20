@@ -104,6 +104,43 @@ Zero Values are as follows:
 | JSONBool | false
 | JSONNull | undefined
 
+GoJSON will also look for the presence of `gojson` tags prior to looking for `json` tags. If the `gojson` tag exists, it will be used for Unmarshalling. Otherwise, the `json` tag will be used. This is useful for times when you wish to have separate behavior when Unmarshaling via gojson, and marshalling via encoding/json.
+
+Example:
+```
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/btm6084/gojson"
+)
+
+type Example struct {
+	Product string `json:"-" gojson:"product"`
+}
+
+func main() {
+	data := []byte(`{"product": "some product identifier"}`)
+
+	var e Example
+
+	gojson.Unmarshal(data, &e)
+	fmt.Println(e.Product) // produces `some product identifier`
+
+	m, _ := json.Marshal(e)
+	fmt.Println(string(m)) // produces `{}`
+}
+```
+
+Output:
+```
+some product identifier
+{}
+```
+
+
 ### PostUnmarshalJSON
 
 The gojson unmarshaller provides a new interface, PostUnmarshalJSON, defined as follow:

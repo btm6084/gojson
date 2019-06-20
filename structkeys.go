@@ -181,11 +181,27 @@ func getTags(f *reflect.StructField, key string) ([]string, bool, bool) {
 		return []string{strings.ToLower(f.Name)}, false, false
 	}
 
-	if f.Tag.Get(`json`) == `-` {
+	// We allow gojson tags to be used to separate behavior from encoding/json.
+	// A reason to do this would be if you want the field to be unmarshaled, but not
+	// marshalled.
+	//
+	// Example:
+	//  type Example struct {
+	//      Product *string `json:"-" gojson:"product"`
+	//  }
+	//
+	//  Product would be unmarshalled into the struct as `product`, but json.Marshal would omit it.
+	tagSource := "json"
+	if f.Tag.Get("gojson") != "" {
+		tagSource = "gojson"
+	}
+
+	// If the tag consists of ONLY a dash, ignore it.
+	if f.Tag.Get(tagSource) == `-` {
 		return []string(nil), false, false
 	}
 
-	keys := strings.Split(f.Tag.Get("json"), `,`)
+	keys := strings.Split(f.Tag.Get(tagSource), `,`)
 	final := make([]string, len(keys))
 
 	count := 0
@@ -213,6 +229,10 @@ func getTags(f *reflect.StructField, key string) ([]string, bool, bool) {
 	final = final[:count]
 	if len(final) == 0 {
 		return []string{strings.ToLower(f.Name)}, false, false
+	}
+
+	if len(final) == 1 && final[0] == "-" {
+		return []string{}, false, false
 	}
 
 	return final, required, nonempty
