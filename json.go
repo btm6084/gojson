@@ -138,32 +138,35 @@ func isPositiveNumber(b []byte) bool {
 		return false
 	}
 
+	idx := 0
+
 	E := bytes.Count(b, exponentE)
 	if E > 1 {
 		return false
 	}
-
 	if E == 1 {
-		idx := bytes.Index(b, exponentE)
-		b[idx] = exponent[0]
+		idx = bytes.Index(b, exponentE)
 	}
 
 	exponents := bytes.Count(b, exponent)
 	if exponents > 1 {
 		return false
 	}
+	if exponents == 1 {
+		idx = bytes.Index(b, exponent)
+	}
+
+	exponents += E
 
 	switch true {
 	case periods == 1 && exponents == 0: // DecimalNumber . Digits
 		per := bytes.Index(b, period)
 		return isDecimalNumber(b[:per]) && isExponent(b[per+1:])
 	case periods == 0 && exponents == 1: // DecimalNumber ExponentPart
-		exp := bytes.Index(b, exponent)
-		return isDecimalNumber(b[:exp]) && isExponent(b[exp+1:])
+		return isDecimalNumber(b[:idx]) && isExponent(b[idx+1:])
 	case periods == 1 && exponents == 1: // DecimalNumber . Digits ExponentPart
 		per := bytes.Index(b, period)
-		exp := bytes.Index(b, exponent)
-		return isDecimalNumber(b[:per]) && isDigits(b[per+1:exp]) && isExponent(b[exp+1:])
+		return isDecimalNumber(b[:per]) && isDigits(b[per+1:idx]) && isExponent(b[idx+1:])
 	default: // DecimalNumber
 		return isDecimalNumber(b)
 	}

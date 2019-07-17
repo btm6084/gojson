@@ -110,6 +110,12 @@ func TestJSONIsFalse(t *testing.T) {
 }
 
 func TestIsJSONNumber(t *testing.T) {
+	t.Run("Make sure strings aren't changed", func(t *testing.T) {
+		var b = []byte("TEST")
+		assert.False(t, IsJSONNumber(b))
+		assert.Equal(t, string("TEST"), string(b))
+	})
+
 	t.Run("Empty String", func(t *testing.T) {
 		assert.False(t, IsJSONNumber([]byte{}))
 	})
