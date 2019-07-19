@@ -124,7 +124,7 @@ func getStructInfo(t reflect.Type) *StructDescriptor {
 		}
 
 		// Expand embeded (anonymous) structs.
-		if f.Anonymous {
+		if f.Anonymous && f.Type.Kind() == reflect.Struct {
 			expanded := getStructInfo(f.Type)
 
 			if len(expanded.RequiredKeys) > 0 {

@@ -1566,3 +1566,19 @@ func TestUnmarshalGoJSONTags(t *testing.T) {
 		assert.JSONEq(t, `{ "both": "Will be unmarshalled AND marshalled", "GoJSON": "Unmarshalled with gojson tag, marshaled with struct name" }`, string(m))
 	})
 }
+
+func TestUnmarshalAnonymousIsNotStruct(t *testing.T) {
+	type Strings []struct {
+		TheString string `json:"theString"`
+	}
+	type HasStrings struct {
+		Strings `json:"strings"`
+	}
+
+	var m HasStrings
+	data := []byte(`{"strings": [{"theString": "String A"}, {"theString": "String B"}]}`)
+	err := Unmarshal(data, &m)
+	assert.Nil(t, err)
+	assert.Equal(t, "String A", m.Strings[0].TheString)
+	assert.Equal(t, "String B", m.Strings[1].TheString)
+}
