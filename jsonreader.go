@@ -409,9 +409,23 @@ func toInt(b []byte, t string, strict bool) int {
 		if len(b) >= 2 && b[0] == '"' && b[len(b)-1] == '"' {
 			b = b[1 : len(b)-1]
 		}
+
+		t = GetJSONType(b, 0)
+		if t != JSONString {
+			return toInt(b, t, strict)
+		}
+	case JSONFloat:
+		i, err := strconv.ParseFloat(*(*string)(unsafe.Pointer(&b)), 64)
+		if err != nil {
+			if strict {
+				panic(err)
+			}
+			return 0
+		}
+		return int(i)
 	}
 
-	i, err := strconv.ParseFloat(*(*string)(unsafe.Pointer(&b)), 64)
+	i, err := strconv.ParseInt(*(*string)(unsafe.Pointer(&b)), 10, 64)
 	if err != nil {
 		if strict {
 			panic(err)

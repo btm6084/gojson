@@ -1674,3 +1674,15 @@ func TestStringInArray(t *testing.T) {
 		})
 	}
 }
+
+func TestInt64LargeValue(t *testing.T) {
+	var expected int64 = 6754210771357157538
+	actual := toInt([]byte("6.754210771357157538e18"), JSONFloat, false)
+	assert.Equal(t, 6754210771357157376, actual)
+
+	actual = toInt([]byte("6.754210771357157538e17"), JSONInt, false)
+	assert.Equal(t, 0, actual)
+
+	actual = toInt([]byte("6754210771357157538"), JSONInt, false)
+	assert.Equal(t, int(expected), actual)
+}
