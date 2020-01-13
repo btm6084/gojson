@@ -1582,3 +1582,18 @@ func TestUnmarshalAnonymousIsNotStruct(t *testing.T) {
 	assert.Equal(t, "String A", m.Strings[0].TheString)
 	assert.Equal(t, "String B", m.Strings[1].TheString)
 }
+
+func TestUnmarshalNonLiteralString(t *testing.T) {
+	input := `[{"article":"
+		newlines are invalid.
+		They're not string \"literals\".
+	"}]`
+
+	var articles []struct {
+		Article string `json:"article"`
+	}
+
+	Unmarshal([]byte(input), &articles)
+
+	assert.Equal(t, "\n\t\tnewlines are invalid.\n\t\tThey're not string \"literals\".\n\t", articles[0].Article)
+}
