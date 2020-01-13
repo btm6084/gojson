@@ -209,8 +209,10 @@ func toString(b []byte, t string, strict bool) string {
 		// If we're already quoted, call Unquote directly.
 		if b[0] == '"' {
 			s, err := strconv.Unquote(*(*string)(unsafe.Pointer(&b)))
+			// If Unquote fails (which it often does due to things like newlines), strip the leading/trailing quotes
+			// and unquote any double quotes in the string.
 			if err != nil {
-				return string(b)
+				s = manualUnescapeString(b)
 			}
 
 			return s
@@ -220,6 +222,23 @@ func toString(b []byte, t string, strict bool) string {
 	}
 
 	return string(b)
+}
+
+// manualUnescapeString unquotes a quoted string, and replaces any escaped quotes with plain quotes.
+func manualUnescapeString(b []byte) string {
+	if len(b) < 2 {
+		return string(b)
+	}
+
+	if b[0] != '"' || b[len(b)-1] != '"' {
+		return string(b)
+	}
+
+	if !bytes.Contains(b, []byte{'\\', '"'}) {
+		return string(b[1 : len(b)-1])
+	}
+
+	return string(bytes.ReplaceAll(b[1:len(b)-1], []byte{'\\', '"'}, []byte{'"'}))
 }
 
 // Revert the HTML escaping for printable characters the encode/json Marshal performs if necessary.
