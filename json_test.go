@@ -3,6 +3,7 @@ package gojson
 import (
 	"testing"
 
+	"github.com/spf13/cast"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,6 +34,14 @@ func TestJSONIsJSON(t *testing.T) {
 			assert.Equal(t, tc.expected, IsJSON([]byte(tc.input)))
 		})
 	}
+
+	t.Run("Space between braces was breaking IsJSON", func(t *testing.T) {
+		data := []byte(`{"stats":{"count":176,"price":{ }},"updated":"","updatedBy":""}`)
+		assert.True(t, IsJSON(data), "Space in Empty Object")
+
+		data = []byte(`{"stats":{"count":176,"price":[ ]},"updated":"","updatedBy":""}`)
+		assert.True(t, IsJSON(data), "Space in Empty Array")
+	})
 }
 
 func TestJSONIsNull(t *testing.T) {
@@ -810,4 +819,58 @@ func TestIsEmptyArray(t *testing.T) {
 	t.Run("No Opener", func(t *testing.T) {
 		assert.False(t, IsEmptyArray([]byte(`"a", "b", "c"]`)))
 	})
+
+	testCases := []struct {
+		input    string
+		expected bool
+	}{
+		{expected: false, input: `http://not.actually.json/`},
+		{expected: false, input: `[]]`},
+		{expected: false, input: `[[`},
+		{expected: false, input: `]]`},
+		{expected: false, input: `[1]`},
+		{expected: false, input: `[{}]`},
+		{expected: false, input: `{}`},
+		{expected: false, input: `[]a`},
+		{expected: true, input: `[ ]`},
+		{expected: true, input: ` [ ] `},
+		{expected: true, input: ` [ ]`},
+		{expected: true, input: `[]`},
+	}
+
+	for i, tc := range testCases {
+		t.Run(cast.ToString(i), func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsEmptyArray([]byte(tc.input)), tc.input)
+		})
+	}
+}
+
+func TestIsEmptyObject(t *testing.T) {
+	t.Run("No Opener", func(t *testing.T) {
+		assert.False(t, IsEmptyArray([]byte(`"a", "b", "c"]`)))
+	})
+
+	testCases := []struct {
+		input    string
+		expected bool
+	}{
+		{expected: false, input: `http://not.actually.json/`},
+		{expected: false, input: `{}}`},
+		{expected: false, input: `{{`},
+		{expected: false, input: `}}`},
+		{expected: false, input: `{"a": 1}`},
+		{expected: false, input: `{[]}`},
+		{expected: false, input: `[]`},
+		{expected: false, input: `{}a`},
+		{expected: true, input: `{ }`},
+		{expected: true, input: ` { } `},
+		{expected: true, input: ` { }`},
+		{expected: true, input: `{}`},
+	}
+
+	for i, tc := range testCases {
+		t.Run(cast.ToString(i), func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsEmptyObject([]byte(tc.input)), tc.input)
+		})
+	}
 }

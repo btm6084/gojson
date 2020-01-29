@@ -366,7 +366,7 @@ func IsJSONObject(b []byte) bool {
 		return false
 	}
 
-	if len(b) == 2 && b[0] == '{' && b[1] == '}' {
+	if IsEmptyObject(b) {
 		return true
 	}
 
@@ -432,7 +432,7 @@ func IsJSONArray(b []byte) bool {
 		return false
 	}
 
-	if len(b) == 2 && b[0] == '[' && b[1] == ']' {
+	if IsEmptyArray(b) {
 		return true
 	}
 
@@ -643,7 +643,8 @@ func IsEmptyObject(b []byte) bool {
 // Ignoring whitespace, attempts to determine whether the given byte string represents
 // and empty JSONObject ({}) or empty JSONArray ([])
 func isEmptyComplexItem(b []byte, open, close byte) bool {
-	current := ltrim(b, 0)
+	b = trim(b)
+	current := 0
 	if len(b) < 2 {
 		return false
 	}
