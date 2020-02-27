@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/spf13/cast"
 )
 
 type result struct {
@@ -53,12 +55,7 @@ func (u *unmarshaler) unmarshal(raw []byte, v interface{}) (err error) {
 
 	raw = trim(raw)
 
-	// We make a copy so that the backing array is completely incapsulated
-	// by the unmarshaler, so that the user can't change the backing array later.
-	b := make([]byte, len(raw))
-	copy(b, raw)
-
-	if len(b) == 0 {
+	if len(raw) == 0 {
 		return fmt.Errorf("empty json value provided")
 	}
 
@@ -75,15 +72,15 @@ func (u *unmarshaler) unmarshal(raw []byte, v interface{}) (err error) {
 	// Check if p implements the json.Unmarshaler interface.
 	if p.CanAddr() && p.Addr().NumMethod() > 0 {
 		if u, ok := p.Addr().Interface().(PostUnmarshaler); ok {
-			defer func() { err = u.PostUnmarshalJSON(b, err) }()
+			defer func() { err = u.PostUnmarshalJSON(raw, err) }()
 		}
 		if u, ok := p.Addr().Interface().(json.Unmarshaler); ok {
-			err = u.UnmarshalJSON(b)
+			err = u.UnmarshalJSON(raw)
 			return
 		}
 	}
 
-	t := GetJSONType(b, 0)
+	t := GetJSONType(raw, 0)
 
 	if t == JSONInvalid {
 		err = ErrMalformedJSON
@@ -92,21 +89,21 @@ func (u *unmarshaler) unmarshal(raw []byte, v interface{}) (err error) {
 
 	switch p.Kind() {
 	case reflect.Map:
-		err = u.unmarshalMap(b, t, p)
+		err = u.unmarshalMap(raw, t, p)
 		return err
 	case reflect.Slice:
-		err = u.unmarshalSlice(b, t, p)
+		err = u.unmarshalSlice(raw, t, p)
 		return err
 	case reflect.Struct:
-		err = u.unmarshalStruct(b, t, p)
+		err = u.unmarshalStruct(raw, t, p)
 		return err
 	case reflect.Interface:
-		v := reflect.ValueOf(toIface(b, t, u.StrictStandards))
+		v := reflect.ValueOf(toIface(raw, t, u.StrictStandards))
 		if v.IsValid() {
 			p.Set(v)
 		}
 	default:
-		err = u.setValue(b, t, p)
+		err = u.setValue(raw, t, p)
 		if err != nil {
 			return err
 		}
@@ -150,48 +147,91 @@ func (u *unmarshaler) unmarshalSlice(b []byte, t string, p reflect.Value) (err e
 		return nil
 	}
 
-	var nodes []result
-	nodes, err = getNodeList(b, t)
-	if err != nil {
-		return err
+	// Count the member elements so that we can know how big to size our slice.
+	length := countMembers(b, t)
+
+	if length < 1 {
+		return nil
 	}
 
-	length := len(nodes)
 	slice := reflect.MakeSlice(p.Type(), length, length)
 
 	// Switch on the child type
-	for i := 0; i < length; i++ {
+	start := 1
+	i := 0
+	for start < len(b) {
+		var v []byte
+		var err error
+		var pos int
+		var vt string
+
+		switch t {
+		case JSONObject:
+			v, _, vt, pos, err = extractObjectMember(b, start)
+			if err != nil {
+				return err
+			}
+
+			start = findTerminator(b, pos)
+			if pos >= len(b) || start < 0 {
+				return fmt.Errorf("expected value terminator ('}', ']' or ',') at position '%d' in segment '%s'", pos, truncate(b, 50))
+			}
+		case JSONArray:
+			v, vt, pos, err = extractValue(b, start)
+			if err != nil {
+				return err
+			}
+
+			start = findTerminator(b, pos)
+			if pos >= len(b) || start < 0 {
+				return fmt.Errorf("expected value terminator ('}', ']' or ',') at position '%d' in segment '%s'", pos, truncate(b, 50))
+			}
+		default:
+			v, vt, pos, err = extractValue(b, 0)
+			if err != nil {
+				return err
+			}
+
+			start = pos
+		}
+
+		if err != nil {
+			return err
+		}
+
 		sliceMember := slice.Index(i)
 		child := resolvePtr(sliceMember)
 
 		switch child.Kind() {
 		case reflect.Map:
-			err = u.unmarshalMap(nodes[i].Value, nodes[i].Type, child)
+			err = u.unmarshalMap(v, vt, child)
 			if err != nil {
 				return err
 			}
 		case reflect.Slice:
-			err = u.unmarshalSlice(nodes[i].Value, nodes[i].Type, child)
+			err = u.unmarshalSlice(v, vt, child)
 			if err != nil {
 				return err
 			}
 		case reflect.Struct:
-			err = u.unmarshalStruct(nodes[i].Value, nodes[i].Type, child)
+			err = u.unmarshalStruct(v, vt, child)
 			if err != nil {
 				return err
 			}
 		case reflect.Interface:
-			if v := reflect.ValueOf(toIface(nodes[i].Value, nodes[i].Type, u.StrictStandards)); v.IsValid() {
+			if v := reflect.ValueOf(toIface(v, vt, u.StrictStandards)); v.IsValid() {
 				child.Set(v)
 			} else {
 				child.Set(reflect.New(p.Type().Elem()).Elem())
 			}
 		default:
-			err = u.setValue(nodes[i].Value, nodes[i].Type, child)
+			err = u.setValue(v, vt, child)
 			if err != nil {
 				return err
 			}
 		}
+
+		i++
 	}
 
 	p.Set(slice)
@@ -240,55 +280,96 @@ func (u *unmarshaler) unmarshalMap(b []byte, t string, p reflect.Value) (err err
 		return nil
 	}
 
-	var nodes []result
-	nodes, err = getNodeList(b, t)
-	if err != nil {
-		return err
+	switch {
+	case t == JSONObject && IsEmptyObject(b):
+		return nil
+	case t == JSONArray && IsEmptyArray(b):
+		return nil
 	}
 
-	length := len(nodes)
 	newMap := reflect.MakeMap(p.Type())
 
 	// Switch on the child type
-	for i := 0; i < length; i++ {
-		key := reflect.ValueOf(nodes[i].Key)
+	start := 1
+	i := 0
+	for start < len(b) {
+		var v []byte
+		var err error
+		var pos int
+		var vt, k string
+
+		switch t {
+		case JSONObject:
+			v, k, vt, pos, err = extractObjectMember(b, start)
+			if err != nil {
+				return err
+			}
+
+			start = findTerminator(b, pos)
+			if pos >= len(b) || start < 0 {
+				return fmt.Errorf("expected value terminator ('}', ']' or ',') at position '%d' in segment '%s'", pos, truncate(b, 50))
+			}
+		case JSONArray:
+			v, vt, pos, err = extractValue(b, start)
+			if err != nil {
+				return err
+			}
+
+			start = findTerminator(b, pos)
+			if pos >= len(b) || start < 0 {
+				return fmt.Errorf("expected value terminator ('}', ']' or ',') at position '%d' in segment '%s'", pos, truncate(b, 50))
+			}
+			k = cast.ToString(i)
+		default:
+			v, vt, pos, err = extractValue(b, 0)
+			if err != nil {
+				return err
+			}
+
+			start = pos
+			k = cast.ToString(i)
+		}
+
+		key := reflect.ValueOf(k)
 
 		mapElement := reflect.New(p.Type().Elem()).Elem()
 		child := resolvePtr(mapElement)
 
 		switch child.Kind() {
 		case reflect.Map:
-			err = u.unmarshalMap(nodes[i].Value, nodes[i].Type, child)
+			err = u.unmarshalMap(v, vt, child)
 			if err != nil {
 				return err
 			}
 			newMap.SetMapIndex(key, mapElement)
 
 		case reflect.Slice:
-			err = u.unmarshalSlice(nodes[i].Value, nodes[i].Type, child)
+			err = u.unmarshalSlice(v, vt, child)
 			if err != nil {
 				return err
 			}
 			newMap.SetMapIndex(key, mapElement)
 		case reflect.Struct:
-			err = u.unmarshalStruct(nodes[i].Value, nodes[i].Type, child)
+			err = u.unmarshalStruct(v, vt, child)
 			if err != nil {
 				return err
 			}
 			newMap.SetMapIndex(key, mapElement)
 		case reflect.Interface:
-			if v := reflect.ValueOf(toIface(nodes[i].Value, nodes[i].Type, u.StrictStandards)); v.IsValid() {
+			if v := reflect.ValueOf(toIface(v, vt, u.StrictStandards)); v.IsValid() {
 				newMap.SetMapIndex(key, v)
 			} else {
 				newMap.SetMapIndex(key, mapElement)
 			}
 		default:
-			err = u.setValue(nodes[i].Value, nodes[i].Type, child)
+			err = u.setValue(v, vt, child)
 			if err != nil {
 				return err
 			}
 			newMap.SetMapIndex(key, mapElement)
 		}
+
+		i++
 	}
 
 	p.Set(newMap)
