@@ -37,33 +37,46 @@ import (
 // Extract(data, "metadata.keywords.1") returns []byte(`"sample"`), "string", nil
 // Extract(data, "metadata.error_code") returns []byte{'0'}, "int", nil
 // Extract(data, "metadata.keywords.17") returns []byte(nil), "", "requested key 'metadata.keywords.17' doesn't exist
+//
+// On return, a copy is made of the extracted data. This allows it to be modified without changing the original JSON.
 func Extract(search []byte, path string) ([]byte, string, error) {
 	if len(search) == 0 {
 		return nil, "", ErrEmpty
 	}
 
-	// We make a copy so that the backing array is completely incapsulated
-	// by the reader, so that the user can't change the backing array later.
-	b := make([]byte, len(search))
-	copy(b, search)
-
 	// If the key is empty, return the root.
 	if path == "" {
-		b, t, _, err := extractValue(b, 0)
-		return b, t, err
+		b, t, _, err := extractValue(search, 0)
+		var retVal []byte
+		if b != nil {
+			retVal = make([]byte, len(b))
+			copy(retVal, b)
+		}
+		return retVal, t, err
 	}
 
 	// Find the primary JSON type
-	switch t := GetJSONType(b, 0); t {
+	switch t := GetJSONType(search, 0); t {
 	case JSONString, JSONFloat, JSONInt, JSONBool, JSONNull:
 		if path != "" {
 			return nil, "", fmt.Errorf("key path provided '%s' is invalid for JSON type '%s'", path, t)
 		}
-		b, t, _, err := extractValue(b, 0)
-		return b, t, err
+
+		b, t, _, err := extractValue(search, 0)
+		var retVal []byte
+		if b != nil {
+			retVal = make([]byte, len(b))
+			copy(retVal, b)
+		}
+		return retVal, t, err
 	case JSONObject, JSONArray:
-		b, t, _, err := extractKeyPath(b, path)
-		return b, t, err
+		b, t, _, err := extractKeyPath(search, path)
+		var retVal []byte
+		if b != nil {
+			retVal = make([]byte, len(b))
+			copy(retVal, b)
+		}
+		return retVal, t, err
 	}
 
 	return nil, "", fmt.Errorf("requested key path '%s' doesn't exist or json is malformed", path)

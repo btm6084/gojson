@@ -113,6 +113,17 @@ func TestExtractReader(t *testing.T) {
 }
 
 func TestExtractString(t *testing.T) {
+
+	t.Run("ToString Changes things.", func(t *testing.T) {
+		data := []byte(`["Kongming, \"Sleeping Dragon\""]`)
+		s, err := ExtractString(data, "0")
+
+		assert.Nil(t, err)
+		assert.Equal(t, `Kongming, "Sleeping Dragon"`, s)
+		assert.Equal(t, []byte(`["Kongming, \"Sleeping Dragon\""]`), data, "Original Array should not be modified!")
+
+	})
+
 	t.Run("Extract Failure", func(t *testing.T) {
 		data := []byte(`This is not json`)
 		s, err := ExtractString(data, "")
