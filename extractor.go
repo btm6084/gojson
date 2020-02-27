@@ -285,15 +285,14 @@ func extractString(search []byte, start int) ([]byte, string, int, error) {
 
 	start++
 	end := start
+	for end <= len(search)-1 {
+		b := search[end]
+		if b == '\\' {
+			end += 2
+			continue
+		}
 
-	escape := false
-	for found := false; !found && end <= len(search)-1; {
-		switch {
-		case escape:
-			escape = false
-		case search[end] == '\\' && !escape:
-			escape = true
-		case search[end] == '"' && !escape: // Found an ending string
+		if b == '"' {
 			return search[start-1 : end+1], JSONString, end + 1, nil
 		}
 
@@ -383,32 +382,36 @@ func extractArray(search []byte, start int) ([]byte, string, int, error) {
 func extractComplexItem(search []byte, start int, open, close byte, dtype string) ([]byte, string, int, error) {
 	start = ltrim(search, start)
 	end := start
-	openString := false
 	depth := 0
-	escape := false
+	var err error
 
 	for end <= len(search)-1 {
 		b := search[end]
 
 		switch {
-		case escape:
-			escape = false
-		case b == '\\' && !escape:
-			escape = true
-		case b == '"' && !escape:
-			openString = !openString
-		case openString || (b != close && b != open): // If we're in a string, continue until we find the end of that string.
-			break
+		case b == '\\':
+			end += 2
+			continue
+		case b == '"':
+			_, _, end, err = extractString(search, end)
+			if err != nil {
+				return nil, "", 0, err
+			}
+			continue
 		case b == close: // If Depth is one, we've found the end of our object.
 			if depth == 1 {
 				return search[start : end+1], dtype, end + 1, nil
 			}
 			depth--
+			end++
+			continue
 		case b == open: // Sub-Object begin
 			depth++
+			end++
+			continue
+		default:
+			end++
 		}
-
-		end++
 	}
 
 	return nil, "", 0, fmt.Errorf("expected %s not found in segment '%s'", dtype, truncate(search, 50))
@@ -470,4 +473,62 @@ func extractArrayValue(search []byte, start int) ([]byte, string, int, error) {
 	}
 
 	return v, t, finalPos, termErr
+}
+
+// countMembers assumes a full object or slice, complete with opening and closing brackets.
+func countMembers(b []byte, t string) int {
+	if IsEmptyArray(b) || IsEmptyObject(b) {
+		return 0
+	}
+
+	switch t {
+	case JSONObject:
+		return countObjectMembers(b)
+	case JSONArray:
+		return countSliceMembers(b)
+	case JSONNull:
+		return -1
+	default:
+		return 1
+	}
+}
+
+func countObjectMembers(b []byte) int {
+	start := 1
+	length := 0
+	for start < len(b) {
+		_, _, _, pos, err := extractObjectMember(b, start)
+		if err != nil {
+			panic(err)
+		}
+
+		start = findTerminator(b, pos)
+		if pos >= len(b) || start < 0 {
+			panic(fmt.Errorf("expected value terminator ('}', ']' or ',') at position '%d' in segment '%s'", pos, truncate(b, 50)))
+		}
+
+		length++
+	}
+
+	return length
+}
+
+func countSliceMembers(b []byte) int {
+	start := 1
+	length := 0
+	for start < len(b) {
+		_, _, pos, err := extractValue(b, start)
+		if err != nil {
+			panic(err)
+		}
+
+		start = findTerminator(b, pos)
+		if pos >= len(b) || start < 0 {
+			panic(fmt.Errorf("expected value terminator ('}', ']' or ',') at position '%d' in segment '%s'", pos, truncate(b, 50)))
+		}
+
+		length++
+	}
+
+	return length
 }

@@ -1,7 +1,6 @@
 package gojson
 
 import (
-	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -196,62 +195,71 @@ func toString(b []byte, t string, strict bool) string {
 		return ""
 	}
 
-	switch t {
-	case JSONNull:
-		return ""
-	case JSONString:
-		if strict {
-			if !IsJSONString(b) {
-				panic(fmt.Errorf("invalid escape sequence in segment '%s'", truncate(b, 50)))
-			}
+	if strict {
+		if !IsJSONString(b) {
+			panic(fmt.Errorf("invalid escape sequence in segment '%s'", truncate(b, 50)))
 		}
-
-		// If we're already quoted, call Unquote directly.
-		if b[0] == '"' {
-			s, err := strconv.Unquote(*(*string)(unsafe.Pointer(&b)))
-			// If Unquote fails (which it often does due to things like newlines), strip the leading/trailing quotes
-			// and unquote any double quotes in the string.
-			if err != nil {
-				s = manualUnescapeString(b)
-			}
-
-			return s
-		}
-
-		return marshalerDecode(b)
 	}
 
-	return string(b)
+	if t == JSONNull {
+		return ""
+	}
+
+	return manualUnescapeString(b)
 }
 
 // manualUnescapeString unquotes a quoted string, and replaces any escaped quotes with plain quotes.
 func manualUnescapeString(b []byte) string {
 	if len(b) < 2 {
-		return string(b)
+		return marshalerDecode(b)
 	}
 
 	if b[0] != '"' || b[len(b)-1] != '"' {
-		return string(b)
+		return marshalerDecode(b)
 	}
 
-	if !bytes.Contains(b, []byte{'\\', '"'}) {
-		return string(b[1 : len(b)-1])
-	}
+	return marshalerDecode(b[1 : len(b)-1])
 
-	return string(bytes.ReplaceAll(b[1:len(b)-1], []byte{'\\', '"'}, []byte{'"'}))
 }
 
 // Revert the HTML escaping for printable characters the encode/json Marshal performs if necessary.
 // see: https://golang.org/pkg/encoding/json/#HTMLEscape
 func marshalerDecode(b []byte) string {
-	if bytes.Contains(b, []byte{'\\', 'u', '0', '0', '3', 'c'}) {
-		b = bytes.Replace(b, []byte("\\u003c"), []byte("<"), -1)
-	}
-	if bytes.Contains(b, []byte{'\\', 'u', '0', '0', '3', 'e'}) {
-		b = bytes.Replace(b, []byte("\\u003e"), []byte(">"), -1)
-	}
-	if bytes.Contains(b, []byte{'\\', 'u', '0', '0', '2', '6'}) {
-		b = bytes.Replace(b, []byte("\\u0026"), []byte("&"), -1)
+	for i := 0; i < len(b); i++ {
+		if b[i] == '\\' {
+			if i+1 >= len(b) {
+				continue
+			}
+
+			switch b[i+1] {
+			case 'n':
+				b[i] = '\n'
+				b = b[:i+1+copy(b[i+1:], b[i+2:])]
+			case 't':
+				b[i] = '\t'
+				b = b[:i+1+copy(b[i+1:], b[i+2:])]
+			case 'r':
+				b[i] = '\r'
+				b = b[:i+1+copy(b[i+1:], b[i+2:])]
+			case '"':
+				b[i] = '"'
+				b = b[:i+1+copy(b[i+1:], b[i+2:])]
+			case 'u':
+				if i+5 >= len(b) {
+					continue
+				}
+
+				if r, err := strconv.ParseInt(string(b[i+2:i+6]), 16, 32); err == nil {
+					count := 0
+					for _, bn := range []byte(string(r)) {
+						b[i] = bn
+						i++
+						count++
+					}
+					b = b[:i+copy(b[i:], b[i+(6-count):])]
+				}
+			}
+		}
 	}
 
 	return string(b)
@@ -425,10 +433,7 @@ func toInt(b []byte, t string, strict bool) int {
 		}
 		return 0
 	case JSONString:
-		if len(b) >= 2 && b[0] == '"' && b[len(b)-1] == '"' {
-			b = b[1 : len(b)-1]
-		}
-
+		b = trimString(b)
 		t = GetJSONType(b, 0)
 		if t != JSONString {
 			return toInt(b, t, strict)
