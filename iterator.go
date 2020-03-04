@@ -9,6 +9,9 @@ var (
 	// ErrEndOfInput is returned when there are no further items to extract via Next()
 	ErrEndOfInput = errors.New("Reached end of JSON Input")
 
+	// ErrNoSuchIndex is returned when Index(n) is called and n does not exist.
+	ErrNoSuchIndex = errors.New("Index does not exist")
+
 	// ErrRequiresObject is returned when the input is neither an array or object.
 	ErrRequiresObject = errors.New("NewIterator requires a valid JSONArray or JSONObject")
 )
@@ -22,6 +25,13 @@ type Iterator struct {
 	pos       int
 	start     int
 	end       bool
+	index     []index
+}
+
+type index struct {
+	start int
+	end   int
+	typ   string
 }
 
 // NewIterator returns a primed Iterator
@@ -75,6 +85,8 @@ func (i *Iterator) Next() ([]byte, string, error) {
 		i.end = true
 	}
 
+	i.index = append(i.index, index{start: i.pos, end: pos, typ: t})
+
 	i.lastStart = i.pos
 	i.pos = pos
 
@@ -85,6 +97,39 @@ func (i *Iterator) Next() ([]byte, string, error) {
 // or the first element if never accessed.
 func (i *Iterator) Last() ([]byte, string, error) {
 	b, t, _, err := extractValue(i.data, i.lastStart)
+
+	return b, t, err
+}
+
+// Index moves the internal counter to AFTER the specified member position, and returns the data
+// in that member position. Positions are zero-based, so the first member is Index(0).
+// Note that this means Last() will return the same data as Index(n) when called immediately after
+// Index.
+func (i *Iterator) Index(idx int) ([]byte, string, error) {
+	if idx < 0 {
+		return nil, "", ErrNoSuchIndex
+	}
+
+	if idx < len(i.index) {
+		i.lastStart = i.index[idx].start
+		i.pos = i.index[idx].end
+
+		return i.data[i.index[idx].start : i.index[idx].end-1], i.index[idx].typ, nil
+	}
+
+	var b []byte
+	var t string
+	var err error
+
+	for idx >= len(i.index) {
+		b, t, err = i.Next()
+		if err != nil {
+			if err == ErrEndOfInput {
+				return nil, "", ErrNoSuchIndex
+			}
+			return nil, "", err
+		}
+	}
 
 	return b, t, err
 }
