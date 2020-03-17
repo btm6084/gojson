@@ -1686,3 +1686,13 @@ func TestInt64LargeValue(t *testing.T) {
 	actual = toInt([]byte("6754210771357157538"), JSONInt, false)
 	assert.Equal(t, int(expected), actual)
 }
+
+func TestToStringEmoji(t *testing.T) {
+	input := []byte(`"Emoji!! \ud83d\udc4f \uD83D\uDC4C \ud83d\uDC7B"`)
+	// input := []byte(`"👏"`)
+
+	var output string
+	Unmarshal(input, &output)
+
+	assert.Equal(t, `Emoji!! 👏 👌 👻`, output)
+}
