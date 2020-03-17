@@ -1,6 +1,7 @@
 package gojson
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -234,35 +235,68 @@ func marshalerDecode(b []byte) string {
 			switch b[i+1] {
 			case 'n':
 				b[i] = '\n'
-				b = b[:i+1+copy(b[i+1:], b[i+2:])]
+				return marshalerDecode(b[:i+1+copy(b[i+1:], b[i+2:])])
 			case 't':
 				b[i] = '\t'
-				b = b[:i+1+copy(b[i+1:], b[i+2:])]
+				return marshalerDecode(b[:i+1+copy(b[i+1:], b[i+2:])])
 			case 'r':
 				b[i] = '\r'
-				b = b[:i+1+copy(b[i+1:], b[i+2:])]
+				return marshalerDecode(b[:i+1+copy(b[i+1:], b[i+2:])])
 			case '"':
 				b[i] = '"'
-				b = b[:i+1+copy(b[i+1:], b[i+2:])]
+				return marshalerDecode(b[:i+1+copy(b[i+1:], b[i+2:])])
 			case 'u':
 				if i+5 >= len(b) {
 					continue
 				}
 
-				if r, err := strconv.ParseInt(string(b[i+2:i+6]), 16, 32); err == nil {
-					count := 0
-					for _, bn := range []byte(string(r)) {
-						b[i] = bn
-						i++
-						count++
-					}
-					b = b[:i+copy(b[i:], b[i+(6-count):])]
+				r, err := getUnicodeValue(b[i : i+6])
+				if err != nil {
+					continue
 				}
+
+				length := 6
+
+				// https://unicodebook.readthedocs.io/unicode_encodings.html#utf-16-surrogate-pairs
+				// Unicode Surrogate Pair hex {D800-DBFF},{DC00-DFFF} dec {55296-56319},{56320-57343}
+				if r >= 55296 && r <= 56319 {
+					r2, err := getUnicodeValue(b[i+6 : i+12])
+					if err != nil {
+						continue
+					}
+
+					if r2 >= 56320 && r2 <= 57343 {
+						length = 12
+						r = ((r - 0xD800) * 0x400) + (r2 - 0xDC00) + 0x10000
+					}
+				}
+
+				count := 0
+				for _, bn := range []byte(string(r)) {
+					b[i] = bn
+					i++
+					count++
+				}
+
+				return marshalerDecode(b[:i+copy(b[i:], b[i+(length-count):])])
 			}
 		}
 	}
 
 	return string(b)
+}
+
+// b should match \u[A-z0-9]{4}.
+func getUnicodeValue(b []byte) (int64, error) {
+	if len(b) < 6 {
+		return 0, errors.New("No Unicode Value")
+	}
+
+	if b[0] != '\\' || b[1] != 'u' {
+		return 0, errors.New("No Unicode Value")
+	}
+
+	return strconv.ParseInt(string(b[2:6]), 16, 32)
 }
 
 /**
