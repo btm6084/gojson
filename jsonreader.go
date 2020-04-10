@@ -226,61 +226,72 @@ func manualUnescapeString(b []byte) string {
 // Revert the HTML escaping for printable characters the encode/json Marshal performs if necessary.
 // see: https://golang.org/pkg/encoding/json/#HTMLEscape
 func marshalerDecode(b []byte) string {
-	for i := 0; i < len(b); i++ {
-		if b[i] == '\\' {
-			if i+1 >= len(b) {
-				continue
-			}
-
-			switch b[i+1] {
-			case 'n':
-				b[i] = '\n'
-				return marshalerDecode(b[:i+1+copy(b[i+1:], b[i+2:])])
-			case 't':
-				b[i] = '\t'
-				return marshalerDecode(b[:i+1+copy(b[i+1:], b[i+2:])])
-			case 'r':
-				b[i] = '\r'
-				return marshalerDecode(b[:i+1+copy(b[i+1:], b[i+2:])])
-			case '"':
-				b[i] = '"'
-				return marshalerDecode(b[:i+1+copy(b[i+1:], b[i+2:])])
-			case 'u':
-				if i+5 >= len(b) {
-					continue
-				}
-
-				r, err := getUnicodeValue(b[i : i+6])
-				if err != nil {
-					continue
-				}
-
-				length := 6
-
-				// https://unicodebook.readthedocs.io/unicode_encodings.html#utf-16-surrogate-pairs
-				// Unicode Surrogate Pair hex {D800-DBFF},{DC00-DFFF} dec {55296-56319},{56320-57343}
-				if r >= 55296 && r <= 56319 {
-					r2, err := getUnicodeValue(b[i+6 : i+12])
-					if err != nil {
-						continue
-					}
-
-					if r2 >= 56320 && r2 <= 57343 {
-						length = 12
-						r = ((r - 0xD800) * 0x400) + (r2 - 0xDC00) + 0x10000
-					}
-				}
-
-				count := 0
-				for _, bn := range []byte(string(r)) {
-					b[i] = bn
-					i++
-					count++
-				}
-
-				return marshalerDecode(b[:i+copy(b[i:], b[i+(length-count):])])
-			}
+	i := 0
+	for i < len(b) {
+		if b[i] != '\\' {
+			i++
+			continue
 		}
+
+		if i+1 >= len(b) {
+			i++
+			continue
+		}
+
+		switch b[i+1] {
+		case '\\':
+			b[i] = '\\'
+			b = b[:i+1+copy(b[i+1:], b[i+2:])]
+		case 'n':
+			b[i] = '\n'
+			b = b[:i+1+copy(b[i+1:], b[i+2:])]
+		case 't':
+			b[i] = '\t'
+			b = b[:i+1+copy(b[i+1:], b[i+2:])]
+		case 'r':
+			b[i] = '\r'
+			b = b[:i+1+copy(b[i+1:], b[i+2:])]
+		case '"':
+			b[i] = '"'
+			b = b[:i+1+copy(b[i+1:], b[i+2:])]
+		case 'u':
+			if i+5 >= len(b) {
+				break
+			}
+
+			r, err := getUnicodeValue(b[i : i+6])
+			if err != nil {
+				break
+			}
+
+			length := 6
+
+			// https://unicodebook.readthedocs.io/unicode_encodings.html#utf-16-surrogate-pairs
+			// Unicode Surrogate Pair hex {D800-DBFF},{DC00-DFFF} dec {55296-56319},{56320-57343}
+			if r >= 55296 && r <= 56319 {
+				r2, err := getUnicodeValue(b[i+6 : i+12])
+				if err != nil {
+					break
+				}
+
+				if r2 >= 56320 && r2 <= 57343 {
+					length = 12
+					r = ((r - 0xD800) * 0x400) + (r2 - 0xDC00) + 0x10000
+				}
+			}
+
+			count := 0
+			for _, bn := range []byte(string(r)) {
+				b[i] = bn
+				i++
+				count++
+			}
+
+			b = b[:i+copy(b[i:], b[i+(length-count):])]
+			continue
+		}
+
+		i++
 	}
 
 	return string(b)

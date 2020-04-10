@@ -1,6 +1,7 @@
 package gojson
 
 import (
+	"encoding/json"
 	"strconv"
 	"testing"
 
@@ -1695,4 +1696,14 @@ func TestToStringEmoji(t *testing.T) {
 	Unmarshal(input, &output)
 
 	assert.Equal(t, `Emoji!! 👏 👌 👻`, output)
+}
+
+func TestToStringWithEscapedSlashes(t *testing.T) {
+	input := `C:\t <strong>Pendulum Effect :</strong> You cannot Special Summon monsters, except "Qli" monsters. This effect cannot be negated. Once per turn: You can pay 800 LP; add 1 "Qli" card from your Deck to your hand, except "Qliphort Scout".<br><strong>Monster Text :</strong> <em><br>Booting in Replica Mode…<br>An error has occurred when executing C:\sophia\zefra.exe<br>Unknown publisher.<br>Allow C:\tierra\qliphort.exe ? <Y/N>…[Y]<br>Booting in Autonomy Mode…</em>`
+
+	b, _ := json.Marshal(input)
+
+	var output string
+	Unmarshal(b, &output)
+	assert.Equal(t, input, output)
 }
