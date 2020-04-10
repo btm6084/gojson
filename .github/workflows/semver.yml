@@ -33,6 +33,6 @@ jobs:
 
         if [ "$tagHead" != "$head" ]
         then
-          git tag "$major.$minor.$(($patch+1))"
+          git tag "v$major.$minor.$(($patch+1))"
           git push origin --tags
         fi
