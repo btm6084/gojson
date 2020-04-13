@@ -26,10 +26,11 @@ jobs:
 
         head=`git rev-parse HEAD`
         tagHead=`git rev-parse $tag 2>/dev/null || true`
+        tagNoV=`grep -o "[0-9]\+[.][0-9]\+[.][0-9]\+" <<< $tag`
 
-        major=$(echo $tag | cut -f1 -d'.')
-        minor=$(echo $tag | cut -f2 -d'.')
-        patch=$(echo $tag | cut -f3 -d'.')
+        major=$(echo $tagNoV | cut -f1 -d'.')
+        minor=$(echo $tagNoV | cut -f2 -d'.')
+        patch=$(echo $tagNoV | cut -f3 -d'.')
 
         if [ "$tagHead" != "$head" ]
         then
