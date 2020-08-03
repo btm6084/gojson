@@ -242,6 +242,9 @@ func marshalerDecode(b []byte) string {
 		case '\\':
 			b[i] = '\\'
 			b = b[:i+1+copy(b[i+1:], b[i+2:])]
+		case '/':
+			b[i] = '/'
+			b = b[:i+1+copy(b[i+1:], b[i+2:])]
 		case 'n':
 			b[i] = '\n'
 			b = b[:i+1+copy(b[i+1:], b[i+2:])]
