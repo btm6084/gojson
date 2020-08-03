@@ -227,6 +227,17 @@ func manualUnescapeString(b []byte) string {
 // see: https://golang.org/pkg/encoding/json/#HTMLEscape
 func marshalerDecode(b []byte) string {
 	i := 0
+	controls := map[byte]byte{
+		'"':  '"',
+		'\\': '\\',
+		'/':  '/',
+		'b':  '\b',
+		'f':  '\f',
+		'n':  '\n',
+		'r':  '\r',
+		't':  '\t',
+	}
+
 	for i < len(b) {
 		if b[i] != '\\' {
 			i++
@@ -238,26 +249,14 @@ func marshalerDecode(b []byte) string {
 			continue
 		}
 
-		switch b[i+1] {
-		case '\\':
-			b[i] = '\\'
+		if c, ok := controls[b[i+1]]; ok {
+			b[i] = c
 			b = b[:i+1+copy(b[i+1:], b[i+2:])]
-		case '/':
-			b[i] = '/'
-			b = b[:i+1+copy(b[i+1:], b[i+2:])]
-		case 'n':
-			b[i] = '\n'
-			b = b[:i+1+copy(b[i+1:], b[i+2:])]
-		case 't':
-			b[i] = '\t'
-			b = b[:i+1+copy(b[i+1:], b[i+2:])]
-		case 'r':
-			b[i] = '\r'
-			b = b[:i+1+copy(b[i+1:], b[i+2:])]
-		case '"':
-			b[i] = '"'
-			b = b[:i+1+copy(b[i+1:], b[i+2:])]
-		case 'u':
+			i++
+			continue
+		}
+
+		if b[i+1] == 'u' {
 			if i+5 >= len(b) {
 				break
 			}

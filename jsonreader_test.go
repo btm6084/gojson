@@ -1715,3 +1715,12 @@ func TestToStringWithEscapedFrontSlashes(t *testing.T) {
 	Unmarshal(input, &output)
 	assert.Equal(t, `https://www.mydomain.com/things/`, output)
 }
+
+func TestToStringWithBackspace(t *testing.T) {
+	input := []byte("\"https:\\/\\/www.mydomain.com\u002Fthings\\/\b\b\"")
+
+	var output string
+	Unmarshal(input, &output)
+	assert.NotEqual(t, `https://www.mydomain.com/things/\b\b`, output)
+	assert.Equal(t, "https://www.mydomain.com/things/\b\b", output)
+}
