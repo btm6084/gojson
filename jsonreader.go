@@ -13,17 +13,17 @@ type JSONReader struct {
 	// Keys holds the list of top-level keys
 	Keys []string
 
-	// Empty is true if parsing failed or no data was supplied.
-	Empty bool
-
 	// rawData is the initial byte string provided to NewJSONReader.
 	rawData []byte
+
+	// Type is the JSONType of the top-level data.
+	Type string
 
 	// parsed is the set of child nodes populated by the parser.
 	parsed map[string]parsed
 
-	// Type is the JSONType of the top-level data.
-	Type string
+	// Empty is true if parsing failed or no data was supplied.
+	Empty bool
 
 	// StrictStandards directs the extraction functions to be strict with type
 	// casting and extractions where applicable.
@@ -283,7 +283,7 @@ func marshalerDecode(b []byte) string {
 			}
 
 			count := 0
-			for _, bn := range []byte(string(r)) {
+			for _, bn := range []byte(string(rune(r))) {
 				b[i] = bn
 				i++
 				count++

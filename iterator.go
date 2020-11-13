@@ -20,12 +20,12 @@ var (
 // each member item one-by-one.
 type Iterator struct {
 	data      []byte
-	close     byte
+	index     []index
 	lastStart int
 	pos       int
 	start     int
 	end       bool
-	index     []index
+	close     byte
 }
 
 type index struct {
