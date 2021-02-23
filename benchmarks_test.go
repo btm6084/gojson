@@ -276,10 +276,29 @@ func BenchmarkManualUnquote(b *testing.B) {
 		manualUnescapeString(s)
 	}
 }
+
 func BenchmarkUnquoteDefault(b *testing.B) {
 	s := []byte(`"Shoots \u0026 Giggles \u003c\tGeneral\nKenobi\r\"\u003e\""`)
 
 	for i := 0; i < b.N; i++ {
 		strconv.Unquote(*(*string)(unsafe.Pointer(&s)))
+	}
+}
+
+func BenchmarkMassivelyQuotesString(b *testing.B) {
+	s := []byte(massiveQuotedString)
+	var out string
+
+	for i := 0; i < b.N; i++ {
+		Unmarshal(s, &out)
+	}
+}
+
+func BenchmarkMassivelyQuotesStringDefault(b *testing.B) {
+	s := []byte(massiveQuotedString)
+	var out string
+
+	for i := 0; i < b.N; i++ {
+		json.Unmarshal(s, &out)
 	}
 }
