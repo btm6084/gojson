@@ -226,10 +226,9 @@ func manualUnescapeString(b []byte) string {
 // Revert the HTML escaping for printable characters the encode/json Marshal performs if necessary.
 // see: https://golang.org/pkg/encoding/json/#HTMLEscape
 func marshalerDecode(b []byte) string {
-	i := 0
-	controls := map[byte]byte{
-		'"':  '"',
+	escapes := map[byte]byte{
 		'\\': '\\',
+		'"':  '"',
 		'/':  '/',
 		'b':  '\b',
 		'f':  '\f',
@@ -238,39 +237,49 @@ func marshalerDecode(b []byte) string {
 		't':  '\t',
 	}
 
-	for i < len(b) {
+	out := make([]byte, len(b))
+	outLen := 0
+
+	for i := 0; i < len(b); i++ {
 		if b[i] != '\\' {
-			i++
+			out[outLen] = b[i]
+			outLen++
 			continue
 		}
 
+		// End of String
 		if i+1 >= len(b) {
-			i++
+			out[outLen] = b[i]
+			outLen++
 			continue
 		}
 
-		if c, ok := controls[b[i+1]]; ok {
-			b[i] = c
-			b = b[:i+1+copy(b[i+1:], b[i+2:])]
-			i++
+		if c, ok := escapes[b[i+1]]; ok {
+			out[outLen] = c
+			outLen++
+			i++ // Skip past the consumed escape
 			continue
 		}
 
 		if b[i+1] == 'u' {
 			if i+5 >= len(b) {
-				break
+				out[outLen] = b[i]
+				outLen++
+				continue
 			}
 
 			r, err := getUnicodeValue(b[i : i+6])
 			if err != nil {
-				break
+				out[outLen] = b[i]
+				outLen++
+				continue
 			}
 
 			length := 6
 
 			// https://unicodebook.readthedocs.io/unicode_encodings.html#utf-16-surrogate-pairs
 			// Unicode Surrogate Pair hex {D800-DBFF},{DC00-DFFF} dec {55296-56319},{56320-57343}
-			if r >= 55296 && r <= 56319 {
+			if i+11 < len(b) && (r >= 55296 && r <= 56319) {
 				r2, err := getUnicodeValue(b[i+6 : i+12])
 				if err != nil {
 					break
@@ -282,21 +291,17 @@ func marshalerDecode(b []byte) string {
 				}
 			}
 
-			count := 0
 			for _, bn := range []byte(string(rune(r))) {
-				b[i] = bn
-				i++
-				count++
+				out[outLen] = bn
+				outLen++
 			}
-
-			b = b[:i+copy(b[i:], b[i+(length-count):])]
+			i += length - 1 // -1 to account for the incoming i++ following the continue
 			continue
 		}
 
-		i++
 	}
 
-	return string(b)
+	return string(out[:outLen])
 }
 
 // b should match \u[A-z0-9]{4}.
