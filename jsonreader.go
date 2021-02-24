@@ -237,6 +237,18 @@ func marshalerDecode(b []byte) string {
 		't':  '\t',
 	}
 
+	alloc := false
+	for i := 0; i < len(b); i++ {
+		if b[i] == '\\' {
+			alloc = true
+			break
+		}
+	}
+
+	if !alloc {
+		return string(b)
+	}
+
 	out := make([]byte, len(b))
 	outLen := 0
 

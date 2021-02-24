@@ -1724,3 +1724,16 @@ func TestToStringWithBackspace(t *testing.T) {
 	assert.NotEqual(t, `https://www.mydomain.com/things/\b\b`, output)
 	assert.Equal(t, "https://www.mydomain.com/things/\b\b", output)
 }
+
+func TestToStringShouldntModifyInput(t *testing.T) {
+	input := []byte("\"https:\\/\\/www.mydomain.com\u002Fthings\\/\b\b\"")
+
+	var output string
+	Unmarshal(input, &output)
+	assert.NotEqual(t, `https://www.mydomain.com/things/\b\b`, output)
+	assert.Equal(t, "https://www.mydomain.com/things/\b\b", output)
+
+	Unmarshal(input, &output)
+	assert.NotEqual(t, `https://www.mydomain.com/things/\b\b`, output)
+	assert.Equal(t, "https://www.mydomain.com/things/\b\b", output)
+}
