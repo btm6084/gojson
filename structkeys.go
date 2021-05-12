@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 // StructKey provides information about a single field in a struct
@@ -29,6 +30,9 @@ type StructDescriptor struct {
 	Keys         map[string]StructKey
 	RequiredKeys []string
 	NonEmptyKeys []string
+
+	// KeyMap links alternate names for a field onto a "primary" field.
+	KeyMap map[string]string
 }
 
 // NonEmpty returns true if a key is required to be NonEmpty
@@ -109,6 +113,7 @@ func getStructInfo(t reflect.Type) *StructDescriptor {
 
 	d := &StructDescriptor{}
 	d.Keys = make(map[string]StructKey, t.NumField())
+	d.KeyMap = make(map[string]string)
 	d.RequiredKeys = make([]string, t.NumField())
 	d.NonEmptyKeys = make([]string, t.NumField())
 
@@ -159,11 +164,13 @@ func getStructInfo(t reflect.Type) *StructDescriptor {
 			nc++
 		}
 
-		d.Keys[names[0]] = StructKey{
-			Type:  f.Type,
-			Kind:  f.Type.Kind(),
-			Name:  names[0],
-			Index: i,
+		for _, n := range names {
+			d.Keys[n] = StructKey{
+				Type:  f.Type,
+				Kind:  f.Type.Kind(),
+				Name:  names[0],
+				Index: i,
+			}
 		}
 	}
 
@@ -174,11 +181,21 @@ func getStructInfo(t reflect.Type) *StructDescriptor {
 	return d
 }
 
+func firstCharLower(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	if len(s) == 1 {
+		return string(unicode.ToLower(rune(s[0])))
+	}
+	return string(unicode.ToLower(rune(s[0]))) + string(s[1:])
+}
+
 // Parse the StructField looking for json tags. If there are no tags, fall back to
 // the lowercase of the field name.
 func getTags(f *reflect.StructField, key string) ([]string, bool, bool) {
-	if len(f.Tag.Get(`json`)) == 0 {
-		return []string{strings.ToLower(f.Name)}, false, false
+	if len(f.Tag.Get(`json`)) == 0 && len(f.Tag.Get(`gojson`)) == 0 {
+		return []string{f.Name, strings.ToLower(f.Name), firstCharLower(f.Name)}, false, false
 	}
 
 	// We allow gojson tags to be used to separate behavior from encoding/json.
