@@ -628,10 +628,10 @@ func TestUnmarshal(t *testing.T) {
 				"TestData",
 				`[{"a":"some string","b":true},{"c":false,"d":null},{"e":["a"],"f":{"suba":1}},{"g":123,"h":-123,"i":123.0,"j":1e73}]`,
 				[]map[string]string{
-					map[string]string{"a": "some string", "b": "true"},
-					map[string]string{"c": "false", "d": ""},
-					map[string]string{"e": `["a"]`, "f": `{"suba":1}`},
-					map[string]string{"g": "123", "h": "-123", "i": "123.0", "j": "1e73"},
+					{"a": "some string", "b": "true"},
+					{"c": "false", "d": ""},
+					{"e": `["a"]`, "f": `{"suba":1}`},
+					{"g": "123", "h": "-123", "i": "123.0", "j": "1e73"},
 				},
 			},
 		}
@@ -1596,4 +1596,25 @@ func TestUnmarshalNonLiteralString(t *testing.T) {
 	Unmarshal([]byte(input), &articles)
 
 	assert.Equal(t, "\n\t\tnewlines are invalid.\n\t\tThey're not string \"literals\".\n\t", articles[0].Article)
+}
+
+func TestUnmarshalImplicitKey(t *testing.T) {
+	type Test struct {
+		DataString string
+	}
+
+	var t1 Test
+	err := Unmarshal([]byte(`{"DataString": "a"}`), &t1)
+	assert.Nil(t, err)
+	assert.Equal(t, "a", t1.DataString)
+
+	var t2 Test
+	err = Unmarshal([]byte(`{"dataString": "b"}`), &t2)
+	assert.Nil(t, err)
+	assert.Equal(t, "b", t2.DataString)
+
+	var t3 Test
+	err = Unmarshal([]byte(`{"datastring": "c"}`), &t3)
+	assert.Nil(t, err)
+	assert.Equal(t, "c", t3.DataString)
 }
