@@ -1,0 +1,15 @@
+name: Unit Tests
+
+# On push, run the unittests.
+on: [pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Unit Tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Setup Go
+        uses: actions/setup-go@v2
+      - run: go test ./...
