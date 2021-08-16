@@ -2,6 +2,7 @@ package gojson
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -79,7 +80,7 @@ func TestParse(t *testing.T) {
 		var err error
 		defer func() {
 			assert.True(t, r.Empty)
-			assert.Equal(t, `expected ']', found '"' at position 15`, err.Error())
+			assert.True(t, strings.HasPrefix(err.Error(), `expected ']', found '"' at position 15`))
 		}()
 		defer PanicRecovery(&err)
 
@@ -130,7 +131,7 @@ func TestParseString(t *testing.T) {
 		var b parsed
 
 		defer func() {
-			assert.Equal(t, `expected '"', found 'T' at position 0`, err.Error())
+			assert.True(t, strings.HasPrefix(err.Error(), `expected '"', found 'T' at position 0`))
 			assert.Equal(t, parsed{}, b)
 		}()
 		defer PanicRecovery(&err)
@@ -145,7 +146,7 @@ func TestParseString(t *testing.T) {
 		var b parsed
 
 		defer func() {
-			assert.Equal(t, "unterminated string at starting position 9", err.Error())
+			assert.True(t, strings.HasPrefix(err.Error(), "unterminated string at starting position 9"))
 			assert.Equal(t, parsed{}, b)
 		}()
 		defer PanicRecovery(&err)
@@ -164,7 +165,7 @@ func TestParseConst(t *testing.T) {
 		defer func() {
 			assert.True(t, r.Empty)
 			assert.Equal(t, parsed{}, b)
-			assert.Equal(t, `expected const at position 0`, err.Error())
+			assert.True(t, strings.HasPrefix(err.Error(), `expected const at position 0`))
 		}()
 		defer PanicRecovery(&err)
 
@@ -181,7 +182,7 @@ func TestParseNumber(t *testing.T) {
 		defer func() {
 			assert.True(t, r.Empty)
 			assert.Equal(t, parsed{}, b)
-			assert.Equal(t, `expected number at position 0, found 'a43'`, err.Error())
+			assert.True(t, strings.HasPrefix(err.Error(), `expected number at position 0, found 'a43'`))
 		}()
 		defer PanicRecovery(&err)
 

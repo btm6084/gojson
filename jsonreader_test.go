@@ -3,6 +3,7 @@ package gojson
 import (
 	"encoding/json"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,7 +21,7 @@ func TestNewJSONReader(t *testing.T) {
 		var err error
 		defer func() {
 			assert.True(t, r.Empty)
-			assert.Equal(t, `expected ']', found '"' at position 14`, err.Error())
+			assert.True(t, strings.HasPrefix(err.Error(), `expected ']', found '"' at position 14`))
 		}()
 		defer PanicRecovery(&err)
 

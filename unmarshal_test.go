@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -192,7 +193,7 @@ func TestUnmarshal(t *testing.T) {
 
 		var m A
 		err := UnmarshalStrict([]byte(input), &m)
-		assert.Equal(t, "attempt to unmarshal JSON value with type 'string' into struct", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "attempt to unmarshal JSON value with type 'string' into struct"))
 	})
 
 	t.Run("Struct Invalid JSON", func(t *testing.T) {
@@ -248,14 +249,14 @@ func TestUnmarshal(t *testing.T) {
 		var m valueReceiver
 		data := []byte(`{"A": "B"}`)
 		err := Unmarshal([]byte(data), &m)
-		assert.Equal(t, "valueReceiver Unmarshaler Called", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "valueReceiver Unmarshaler Called"))
 	})
 
 	t.Run("Struct PointerReceiver Unmarshaler", func(t *testing.T) {
 		var m pointerReceiver
 		data := []byte(`{"A": "B"}`)
 		err := Unmarshal([]byte(data), &m)
-		assert.Equal(t, "pointerReceiver Unmarshaler Called", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "pointerReceiver Unmarshaler Called"))
 	})
 
 	t.Run("Struct Key Error Unmarshaler", func(t *testing.T) {
@@ -264,7 +265,7 @@ func TestUnmarshal(t *testing.T) {
 		}
 		data := []byte(`{A: "B"}`)
 		err := Unmarshal([]byte(data), &m)
-		assert.Equal(t, "expected object key at position 1 in segment '{A: \"B\"}'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "expected object key at position 1 in segment '{A: \"B\"}'"))
 	})
 
 	t.Run("Unmarshal Struct, Slice Error", func(t *testing.T) {
@@ -273,7 +274,7 @@ func TestUnmarshal(t *testing.T) {
 		}
 		data := `{ "a": [ a b c d ] }`
 		err := Unmarshal([]byte(data), &m)
-		assert.Equal(t, "invalid character 'a' at position '2' in segment '[ a b c d ]'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "invalid character 'a' at position '2' in segment '[ a b c d ]'"))
 	})
 
 	t.Run("Unmarshal Struct, Map Error", func(t *testing.T) {
@@ -282,7 +283,7 @@ func TestUnmarshal(t *testing.T) {
 		}
 		data := `{ "a": { b: "c" } }`
 		err := Unmarshal([]byte(data), &m)
-		assert.Equal(t, "expected object key at position 1 in segment '{ b: \"c\" }'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "expected object key at position 1 in segment '{ b: \"c\" }'"))
 	})
 
 	t.Run("Unmarshal Struct, Struct Error", func(t *testing.T) {
@@ -294,7 +295,7 @@ func TestUnmarshal(t *testing.T) {
 		}
 		data := `{ "a": { b: "c" } }`
 		err := Unmarshal([]byte(data), &m)
-		assert.Equal(t, "expected object key at position 1 in segment '{ b: \"c\" }'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "expected object key at position 1 in segment '{ b: \"c\" }'"))
 	})
 
 	t.Run("Struct Slice", func(t *testing.T) {
@@ -553,14 +554,14 @@ func TestUnmarshal(t *testing.T) {
 		var m map[string]interface{}
 		data := `[ a b c d ]`
 		err := Unmarshal([]byte(data), &m)
-		assert.Equal(t, "invalid character 'a' at position '2' in segment '[ a b c d ]'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "invalid character 'a' at position '2' in segment '[ a b c d ]'"))
 	})
 
 	t.Run("Unmarshal Map, Slice Error", func(t *testing.T) {
 		var m map[string][]interface{}
 		data := `[[ a b c d ]]`
 		err := Unmarshal([]byte(data), &m)
-		assert.Equal(t, "invalid character 'a' at position '2' in segment '[ a b c d ]'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "invalid character 'a' at position '2' in segment '[ a b c d ]'"))
 	})
 
 	t.Run("Unmarshal Map, Struct Error Strict", func(t *testing.T) {
@@ -569,7 +570,7 @@ func TestUnmarshal(t *testing.T) {
 		}
 		data := `[[ a b c d ]]`
 		err := UnmarshalStrict([]byte(data), &m)
-		assert.Equal(t, "strict standards: attempt to unmarshal JSON value with type 'array' into map", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "strict standards: attempt to unmarshal JSON value with type 'array' into map"))
 	})
 
 	t.Run("Unmarshal Map, Struct Error", func(t *testing.T) {
@@ -586,7 +587,7 @@ func TestUnmarshal(t *testing.T) {
 		data := `[{"a":"some string","b":true},{"c":false "d":null},{"e":["a"],"f":{"suba":1}},{"g":123,"h":-123,"i":123.0,"j":1e73}]`
 		err := Unmarshal([]byte(data), &m)
 		assert.Nil(t, m)
-		assert.Equal(t, `expected value terminator ('}', ']' or ',') at position '10' in segment '{"c":false "d":null}'`, err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), `expected value terminator ('}', ']' or ',') at position '10' in segment '{"c":false "d":null}'`))
 	})
 
 	t.Run("Interface Slice", func(t *testing.T) {
@@ -821,14 +822,14 @@ func TestUnmarshal(t *testing.T) {
 		var m []interface{}
 		data := `[ a b c d ]`
 		err := Unmarshal([]byte(data), &m)
-		assert.Equal(t, "invalid character 'a' at position '2' in segment '[ a b c d ]'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "invalid character 'a' at position '2' in segment '[ a b c d ]'"))
 	})
 
 	t.Run("Unmarshal Slice, Slice Error", func(t *testing.T) {
 		var m [][]interface{}
 		data := `[[ a b c d ]]`
 		err := Unmarshal([]byte(data), &m)
-		assert.Equal(t, "invalid character 'a' at position '2' in segment '[ a b c d ]'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "invalid character 'a' at position '2' in segment '[ a b c d ]'"))
 	})
 
 	t.Run("Unmarshal Slice, Struct Error Strict", func(t *testing.T) {
@@ -837,7 +838,7 @@ func TestUnmarshal(t *testing.T) {
 		}
 		data := `[[ a b c d ]]`
 		err := UnmarshalStrict([]byte(data), &m)
-		assert.Equal(t, "attempt to unmarshal JSON value with type 'array' into struct", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "attempt to unmarshal JSON value with type 'array' into struct"))
 	})
 
 	t.Run("Unmarshal Slice, Struct Error", func(t *testing.T) {
@@ -854,7 +855,7 @@ func TestUnmarshal(t *testing.T) {
 		data := `[{"a":"some string","b":true},{"c":false "d":null},{"e":["a"],"f":{"suba":1}},{"g":123,"h":-123,"i":123.0,"j":1e73}]`
 		err := Unmarshal([]byte(data), &m)
 		assert.Nil(t, m)
-		assert.Equal(t, `expected value terminator ('}', ']' or ',') at position '10' in segment '{"c":false "d":null}'`, err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), `expected value terminator ('}', ']' or ',') at position '10' in segment '{"c":false "d":null}'`))
 	})
 
 	t.Run("Interface Slice", func(t *testing.T) {
@@ -1065,21 +1066,21 @@ func TestUnmarshal(t *testing.T) {
 	t.Run("Channel Container", func(t *testing.T) {
 		m := make(chan int)
 		err := Unmarshal([]byte(readerTestData), &m)
-		assert.Equal(t, "Unmarshal: Invalid Container Type 'chan'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "Unmarshal: Invalid Container Type 'chan'"))
 	})
 
 	t.Run("Slice Channel Container", func(t *testing.T) {
 		type ch chan int
 		m := make([]ch, 1)
 		err := Unmarshal([]byte(`{"a":"b"}`), &m)
-		assert.Equal(t, "Unmarshal: Invalid Container Type 'chan'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "Unmarshal: Invalid Container Type 'chan'"))
 	})
 
 	t.Run("Map Channel Container", func(t *testing.T) {
 		type ch chan int
 		m := make(map[string]ch, 1)
 		err := Unmarshal([]byte(`{"a":"b"}`), &m)
-		assert.Equal(t, "Unmarshal: Invalid Container Type 'chan'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "Unmarshal: Invalid Container Type 'chan'"))
 	})
 
 	t.Run("Map Channel Container", func(t *testing.T) {
@@ -1088,7 +1089,7 @@ func TestUnmarshal(t *testing.T) {
 			A ch `json:"a"`
 		}
 		err := Unmarshal([]byte(`{"a":"b"}`), &m)
-		assert.Equal(t, "Unmarshal: Invalid Container Type 'chan'", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "Unmarshal: Invalid Container Type 'chan'"))
 	})
 
 	t.Run("Non-Pointer Container", func(t *testing.T) {
@@ -1144,7 +1145,7 @@ func TestUnmarshal(t *testing.T) {
 				var m map[string]interface{}
 
 				err := Unmarshal([]byte(tc.Input), &m)
-				assert.Equal(t, tc.Expected, err.Error())
+				assert.True(t, strings.HasPrefix(err.Error(), tc.Expected))
 			})
 		}
 
@@ -1173,21 +1174,21 @@ func TestUnmarshal(t *testing.T) {
 		var m map[string]interface{}
 
 		err := Unmarshal([]byte(`{"a": false, "b": [], "c": 17.9} ]`), &m)
-		assert.Equal(t, `expected object key at position 32 in segment '{"a": false, "b": [], "c": 17.9} ]'`, err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), `expected object key at position 32 in segment '{"a": false, "b": [], "c": 17.9} ]'`))
 	})
 
 	t.Run("Extra Close", func(t *testing.T) {
 		var m map[string]interface{}
 
 		err := Unmarshal([]byte(`{"a": "b"}}`), &m)
-		assert.Equal(t, `expected object key at position 10 in segment '{"a": "b"}}'`, err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), `expected object key at position 10 in segment '{"a": "b"}}'`))
 	})
 
 	t.Run("Valid JSON that Terminates Early", func(t *testing.T) {
 		var m map[string]interface{}
 
 		err := Unmarshal([]byte(`["a", {"b":4}, false]  ]`), &m)
-		assert.Equal(t, `invalid character ']' at position '23' in segment '["a", {"b":4}, false]  ]'`, err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), `invalid character ']' at position '23' in segment '["a", {"b":4}, false]  ]'`))
 	})
 
 	t.Run("Null Value into Interface", func(t *testing.T) {
@@ -1369,7 +1370,8 @@ func TestUnmarshal(t *testing.T) {
 		var tt ImplementsPostUnmarshalerErrorPanic
 
 		err := Unmarshal([]byte(`{"thing": ["stuff", "junk"]}`), &tt)
-		assert.Equal(t, "Error from PostUnmarshalJSON via Panic", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "Error from PostUnmarshalJSON via Panic"))
+
 		assert.Equal(t, []string{"stuff", "junk"}, tt.Thing)
 	})
 
@@ -1377,7 +1379,8 @@ func TestUnmarshal(t *testing.T) {
 		var tt ImplementsPostUnmarshalerErrorReturn
 
 		err := Unmarshal([]byte(`{"thing": ["stuff", "junk"]}`), &tt)
-		assert.Equal(t, "Error from PostUnmarshalJSON via Return", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "Error from PostUnmarshalJSON via Return"))
+
 		assert.Equal(t, []string{"stuff", "junk"}, tt.Thing)
 	})
 
@@ -1385,7 +1388,8 @@ func TestUnmarshal(t *testing.T) {
 		var tt PostUnmarshalerGetsUnmarshalError
 
 		err := Unmarshal([]byte(`{"key": value}`), &tt)
-		assert.Equal(t, `invalid character 'v' at position '8' in segment '{"key": value}' (expected object value)`, err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), `invalid character 'v' at position '8' in segment '{"key": value}' (expected object value)`))
+
 		assert.Equal(t, []string(nil), tt.Thing)
 	})
 
@@ -1433,42 +1437,42 @@ func TestUnmarshalStrict(t *testing.T) {
 		var m *string
 
 		err := UnmarshalStrict([]byte(`42`), &m)
-		assert.Equal(t, errors.New("strict standards error, expected string, got int"), err)
+		assert.True(t, strings.HasPrefix(err.Error(), "strict standards error, expected string, got int"))
 	})
 
 	t.Run("Int", func(t *testing.T) {
 		var m int
 
 		err := UnmarshalStrict([]byte(`42.0`), &m)
-		assert.Equal(t, errors.New("strict standards error, expected int, got float"), err)
+		assert.True(t, strings.HasPrefix(err.Error(), "strict standards error, expected int, got float"))
 	})
 
 	t.Run("Float", func(t *testing.T) {
 		var m float64
 
 		err := UnmarshalStrict([]byte(`42`), &m)
-		assert.Equal(t, errors.New("strict standards error, expected float, got int"), err)
+		assert.True(t, strings.HasPrefix(err.Error(), "strict standards error, expected float, got int"))
 	})
 
 	t.Run("Bool", func(t *testing.T) {
 		var m bool
 
 		err := UnmarshalStrict([]byte(`"42"`), &m)
-		assert.Equal(t, errors.New("strict standards error, expected bool, got string"), err)
+		assert.True(t, strings.HasPrefix(err.Error(), "strict standards error, expected bool, got string"))
 	})
 
 	t.Run("Nested in Struct", func(t *testing.T) {
 		var m struct{ A string }
 
 		err := UnmarshalStrict([]byte(`{"a": 42}`), &m)
-		assert.Equal(t, errors.New("strict standards error, expected string, got int"), err)
+		assert.True(t, strings.HasPrefix(err.Error(), "strict standards error, expected string, got int"))
 	})
 
 	t.Run("Nested in Map", func(t *testing.T) {
 		var m map[string]string
 
 		err := UnmarshalStrict([]byte(`{"a": 42}`), &m)
-		assert.Equal(t, errors.New("strict standards error, expected string, got int"), err)
+		assert.True(t, strings.HasPrefix(err.Error(), "strict standards error, expected string, got int"))
 	})
 
 	t.Run("Array Into Struct", func(t *testing.T) {

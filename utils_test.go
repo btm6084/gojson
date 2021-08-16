@@ -2,6 +2,7 @@ package gojson
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +12,7 @@ func TestPanicRecoveryString(t *testing.T) {
 	var err error
 	defer func() {
 		assert.False(t, err == nil)
-		assert.Equal(t, "Test", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "Test"))
 	}()
 	defer PanicRecovery(&err)
 
@@ -24,7 +25,7 @@ func TestPanicRecoveryError(t *testing.T) {
 	var err error
 	defer func() {
 		assert.False(t, err == nil)
-		assert.Equal(t, "From Error", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "From Error"))
 	}()
 	defer PanicRecovery(&err)
 
@@ -37,7 +38,7 @@ func TestPanicRecoveryInterface(t *testing.T) {
 	var err error
 	defer func() {
 		assert.False(t, err == nil)
-		assert.Equal(t, "Panic. Context: {A:From Struct B:true C:17}", err.Error())
+		assert.True(t, strings.HasPrefix(err.Error(), "panic. context: {A:From Struct B:true C:17}"))
 	}()
 	defer PanicRecovery(&err)
 
