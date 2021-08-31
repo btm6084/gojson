@@ -178,12 +178,52 @@ func extractValue(search []byte, start int) ([]byte, string, int, error) {
 	}
 }
 
+func pathToKeys(path string) []string {
+	var keys []string
+	keyStart := 0
+	hasEscape := false
+	for i := keyStart; i < len(path); i++ {
+		if path[i] == '.' {
+			if i == 0 {
+				keyStart++
+				continue
+			}
+
+			if path[i-1] == '\\' {
+				hasEscape = true
+				continue
+			}
+
+			val := path[keyStart:i]
+			if hasEscape {
+				val = strings.ReplaceAll(val, "\\.", ".")
+			}
+			keys = append(keys, val)
+			keyStart = i + 1
+			hasEscape = false
+		}
+
+		if i == (len(path) - 1) {
+			val := path[keyStart : i+1]
+			if hasEscape {
+				val = strings.ReplaceAll(val, "\\.", ".")
+			}
+			keys = append(keys, val)
+			hasEscape = false
+
+		}
+	}
+
+	return keys
+}
+
 // Given a JSON search space and a key path in the form key[,.keyN+1], return the value defined
 // at that key.
+// If your key contains a period which isn't nested, escape it with a backslash: a.b@example.com => a\.b@example\.com
 func extractKeyPath(search []byte, path string) ([]byte, string, int, error) {
 	found := false
 	start := ltrim(search, 0)
-	keys := strings.Split(path, ".") // Expensive
+	keys := pathToKeys(path)
 
 	if len(keys) < 1 || len(path) < 1 {
 		return nil, "", 0, fmt.Errorf("extractKeyPath: no keys to extract")
