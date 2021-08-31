@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -654,4 +655,41 @@ func TestExtractEscapedBackslash(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.Equal(t, `nbc-world_of_dance:srank_world_finale_front_row-hulu2`, id)
+}
+
+func TestExtractKeysWithPeriods(t *testing.T) {
+	input := []byte(`{
+		"users": {
+			"admin@example.com": true,
+			"a.b@example.com": false,
+			"cde@example.com": true,
+			"f.g.h@example.com": false
+		}
+	}`)
+
+	v, dt, err := Extract(input, "users.admin@example\\.com")
+	require.Nil(t, err)
+	require.Equal(t, JSONBool, dt)
+	require.True(t, IsJSONTrue(v), v)
+
+	v, dt, err = Extract(input, "users.a\\.b@example\\.com")
+	require.Nil(t, err)
+	require.Equal(t, JSONBool, dt)
+	require.True(t, IsJSONFalse(v), v)
+
+	v, dt, err = Extract(input, "users.cde@example\\.com")
+	require.Nil(t, err)
+	require.Equal(t, JSONBool, dt)
+	require.True(t, IsJSONTrue(v), v)
+
+	v, dt, err = Extract(input, "users.f\\.g\\.h@example\\.com")
+	require.Nil(t, err)
+	require.Equal(t, JSONBool, dt)
+	require.True(t, IsJSONFalse(v), v)
+
+	_, _, err = Extract(input, "users.cdef@example\\.com")
+	require.Error(t, err)
+
+	_, _, err = Extract(input, "users2.cde@example\\.com")
+	require.Error(t, err)
 }
