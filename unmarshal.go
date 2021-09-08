@@ -519,6 +519,15 @@ func isZeroValue(v []byte, t string) bool {
 	return false
 }
 
+func ptrKind(p reflect.Value) reflect.Kind {
+	t := p.Elem().Type()
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	return t.Kind()
+}
+
 // Resolve a pointer to a concrete Value. If necessary, memory will be allocated to
 // store the object being pointed to.
 func resolvePtr(p reflect.Value) reflect.Value {

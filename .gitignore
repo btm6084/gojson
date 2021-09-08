@@ -1,4 +1,5 @@
 json/**
 *.prof
 *.test
+*.out
 Untitled*
