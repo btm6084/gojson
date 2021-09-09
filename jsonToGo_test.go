@@ -2,10 +2,123 @@ package gojson
 
 import (
 	"encoding/json"
+	"log"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestNewUnmarshalString(t *testing.T) {
+	t.Run("Massive", func(t *testing.T) {
+		var a, b, c string
+
+		err := UnmarshalJSON([]byte(massiveQuotedString), &a)
+		require.Nil(t, err)
+
+		err = Unmarshal([]byte(massiveQuotedString), &b)
+		require.Nil(t, err)
+
+		err = json.Unmarshal([]byte(massiveQuotedString), &c)
+		require.Nil(t, err)
+
+		require.Equal(t, a, b)
+		require.Equal(t, a, c)
+		require.Equal(t, b, c)
+	})
+
+	t.Run("Small", func(t *testing.T) {
+		value := []byte(`"\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e"`)
+		expected := `‘Hello there.’, <General Kenobi>`
+		var a, b, c *string
+
+		err := UnmarshalJSON([]byte(value), &a)
+		require.Nil(t, err)
+		require.Equal(t, expected, *a, "a")
+
+		err = Unmarshal([]byte(value), &b)
+		require.Nil(t, err)
+		require.Equal(t, expected, *b, "b")
+
+		err = json.Unmarshal([]byte(value), &c)
+		require.Nil(t, err)
+		require.Equal(t, expected, *c, "b")
+
+		require.Equal(t, *a, *b)
+		require.Equal(t, *a, *c)
+		require.Equal(t, *b, *c)
+	})
+}
+
+func BenchmarkNewUnmarshalString(b *testing.B) {
+	value := []byte(massiveQuotedString)
+	smallValue := []byte(`"\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e"`)
+
+	b.Run("DefaultMassive", func(b *testing.B) {
+		var m *string
+
+		for i := 0; i < b.N; i++ {
+			err := json.Unmarshal(value, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("OldMassive", func(b *testing.B) {
+		var m *string
+
+		for i := 0; i < b.N; i++ {
+			err := Unmarshal(value, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("NewMassive", func(b *testing.B) {
+		var m *string
+
+		for i := 0; i < b.N; i++ {
+			err := UnmarshalJSON(value, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("DefaultSmall", func(b *testing.B) {
+		var m *string
+
+		for i := 0; i < b.N; i++ {
+			err := json.Unmarshal(smallValue, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("OldSmall", func(b *testing.B) {
+		var m *string
+
+		for i := 0; i < b.N; i++ {
+			err := Unmarshal(smallValue, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("NewSmall", func(b *testing.B) {
+		var m *string
+
+		for i := 0; i < b.N; i++ {
+			err := UnmarshalJSON(smallValue, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+}
 
 func TestNewUnmarshalInt(t *testing.T) {
 	value := []byte(`-142`)
@@ -27,6 +140,23 @@ func TestNewUnmarshalInt(t *testing.T) {
 		require.Equal(t, a, b)
 		require.Equal(t, a, int(c))
 		require.Equal(t, b, int(c))
+	})
+	t.Run("intptr", func(t *testing.T) {
+		var a, b *int
+		var c *float64
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+
+		require.Equal(t, *a, *b)
+		require.Equal(t, *a, int(*c))
+		require.Equal(t, *b, int(*c))
 	})
 	t.Run("int32", func(t *testing.T) {
 		var a, b int32
@@ -215,8 +345,8 @@ func BenchmarkNewUnmarshalInt(b *testing.B) {
 func TestNewUnmarshalFloat(t *testing.T) {
 	value := []byte(`-2311.2423123`)
 	t.Run("float64", func(t *testing.T) {
-		var a, b float64
-		var c float64
+		var a, b *float64
+		var c *float64
 
 		err := UnmarshalJSON(value, &a)
 		require.Nil(t, err)
@@ -227,9 +357,9 @@ func TestNewUnmarshalFloat(t *testing.T) {
 		err = json.Unmarshal(value, &c)
 		require.Nil(t, err)
 
-		require.Equal(t, a, b)
-		require.Equal(t, a, float64(c))
-		require.Equal(t, b, float64(c))
+		require.Equal(t, *a, *b)
+		require.Equal(t, *a, float64(*c))
+		require.Equal(t, *b, float64(*c))
 	})
 	t.Run("float32", func(t *testing.T) {
 		var a, b float32
@@ -251,99 +381,38 @@ func TestNewUnmarshalFloat(t *testing.T) {
 }
 
 func BenchmarkNewUnmarshalFloat(b *testing.B) {
-	value := []byte(`-124e7`)
+	value := []byte(`-1.24`)
 
 	b.Run("Default", func(b *testing.B) {
-		var m *int
+		var m *float64
 
 		for i := 0; i < b.N; i++ {
-			json.Unmarshal(value, &m)
+			err := json.Unmarshal(value, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 	})
 
 	b.Run("Old", func(b *testing.B) {
-		var m *int
+		var m *float64
 
 		for i := 0; i < b.N; i++ {
-			Unmarshal(value, &m)
+			err := Unmarshal(value, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 	})
 
 	b.Run("New", func(b *testing.B) {
-		var m *int
+		var m *float64
 
 		for i := 0; i < b.N; i++ {
-			UnmarshalJSON(value, &m)
-		}
-	})
-}
-
-func TestNewUnmarshalString(t *testing.T) {
-	t.Run("Massive", func(t *testing.T) {
-		var a, b, c string
-
-		err := UnmarshalJSON([]byte(massiveQuotedString), &a)
-		require.Nil(t, err)
-
-		err = Unmarshal([]byte(massiveQuotedString), &b)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(massiveQuotedString), &c)
-		require.Nil(t, err)
-
-		require.Equal(t, a, b)
-		require.Equal(t, a, c)
-		require.Equal(t, b, c)
-	})
-
-	t.Run("Small", func(t *testing.T) {
-		value := []byte(`"\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e"`)
-		expected := `‘Hello there.’, <General Kenobi>`
-		var a, b, c string
-
-		err := UnmarshalJSON([]byte(value), &a)
-		require.Nil(t, err)
-		require.Equal(t, expected, a, "a")
-
-		err = Unmarshal([]byte(value), &b)
-		require.Nil(t, err)
-		require.Equal(t, expected, b, "b")
-
-		err = json.Unmarshal([]byte(value), &c)
-		require.Nil(t, err)
-		require.Equal(t, expected, c, "b")
-
-		require.Equal(t, a, b)
-		require.Equal(t, a, c)
-		require.Equal(t, b, c)
-	})
-
-}
-
-func BenchmarkNewUnmarshalString(b *testing.B) {
-	value := []byte(massiveQuotedString)
-
-	b.Run("Default", func(b *testing.B) {
-		var m *string
-
-		for i := 0; i < b.N; i++ {
-			json.Unmarshal(value, &m)
-		}
-	})
-
-	b.Run("Old", func(b *testing.B) {
-		var m *string
-
-		for i := 0; i < b.N; i++ {
-			Unmarshal(value, &m)
-		}
-	})
-
-	b.Run("New", func(b *testing.B) {
-		var m *string
-
-		for i := 0; i < b.N; i++ {
-			UnmarshalJSON(value, &m)
+			err := UnmarshalJSON(value, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 	})
 }

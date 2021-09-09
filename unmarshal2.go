@@ -58,20 +58,13 @@ func setValue(b []byte, p reflect.Value) (err error) {
 
 func ptrKind(p reflect.Value) reflect.Kind {
 	for p.Kind() == reflect.Ptr || p.Kind() == reflect.Interface {
+		if p.Elem().Kind() == reflect.Invalid {
+			return p.Type().Elem().Kind()
+		}
 		p = p.Elem()
 	}
-
 	return p.Type().Kind()
 }
-
-// func ptrKind(p reflect.Value) reflect.Kind {
-// 	t := p.Elem().Type()
-// 	for t.Kind() == reflect.Ptr {
-// 		t = t.Elem()
-// 	}
-
-// 	return t.Kind()
-// }
 
 func isJSONTrue(b []byte) bool {
 	if len(b) < 4 {
