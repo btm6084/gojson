@@ -279,20 +279,45 @@ func BenchmarkNewUnmarshalFloat(b *testing.B) {
 }
 
 func TestNewUnmarshalString(t *testing.T) {
-	var a, b, c string
+	t.Run("Massive", func(t *testing.T) {
+		var a, b, c string
 
-	err := UnmarshalJSON([]byte(massiveQuotedString), &a)
-	require.Nil(t, err)
+		err := UnmarshalJSON([]byte(massiveQuotedString), &a)
+		require.Nil(t, err)
 
-	err = Unmarshal([]byte(massiveQuotedString), &b)
-	require.Nil(t, err)
+		err = Unmarshal([]byte(massiveQuotedString), &b)
+		require.Nil(t, err)
 
-	err = json.Unmarshal([]byte(massiveQuotedString), &c)
-	require.Nil(t, err)
+		err = json.Unmarshal([]byte(massiveQuotedString), &c)
+		require.Nil(t, err)
 
-	require.Equal(t, a, b)
-	require.Equal(t, a, c)
-	require.Equal(t, b, c)
+		require.Equal(t, a, b)
+		require.Equal(t, a, c)
+		require.Equal(t, b, c)
+	})
+
+	t.Run("Small", func(t *testing.T) {
+		value := []byte(`"\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e"`)
+		expected := `‘Hello there.’, <General Kenobi>`
+		var a, b, c string
+
+		err := UnmarshalJSON([]byte(value), &a)
+		require.Nil(t, err)
+		require.Equal(t, expected, a, "a")
+
+		err = Unmarshal([]byte(value), &b)
+		require.Nil(t, err)
+		require.Equal(t, expected, b, "b")
+
+		err = json.Unmarshal([]byte(value), &c)
+		require.Nil(t, err)
+		require.Equal(t, expected, c, "b")
+
+		require.Equal(t, a, b)
+		require.Equal(t, a, c)
+		require.Equal(t, b, c)
+	})
+
 }
 
 func BenchmarkNewUnmarshalString(b *testing.B) {

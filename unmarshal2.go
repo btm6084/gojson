@@ -64,6 +64,15 @@ func ptrKind(p reflect.Value) reflect.Kind {
 	return p.Type().Kind()
 }
 
+// func ptrKind(p reflect.Value) reflect.Kind {
+// 	t := p.Elem().Type()
+// 	for t.Kind() == reflect.Ptr {
+// 		t = t.Elem()
+// 	}
+
+// 	return t.Kind()
+// }
+
 func isJSONTrue(b []byte) bool {
 	if len(b) < 4 {
 		return false
