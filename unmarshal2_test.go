@@ -2,39 +2,52 @@ package gojson
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
+// "\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e Emoji!! \ud83d\udc4f \uD83D\uDC4C \ud83d\uDC7B"
+
 func BenchmarkNewUnmarshalString(b *testing.B) {
-	var m *string
+	var m *int
 
 	for i := 0; i < b.N; i++ {
-		UnmarshalJSON([]byte(`"\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e Emoji!! \ud83d\udc4f \uD83D\uDC4C \ud83d\uDC7B"`), &m)
+		UnmarshalJSON([]byte(`-124e7`), &m)
 	}
 }
 func BenchmarkNewUnmarshalStringOld(b *testing.B) {
-	var m *string
+	var m *int
 
 	for i := 0; i < b.N; i++ {
-		Unmarshal([]byte(`"\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e Emoji!! \ud83d\udc4f \uD83D\uDC4C \ud83d\uDC7B"`), &m)
+		Unmarshal([]byte(`-124e7`), &m)
 	}
 }
 
 func BenchmarkNewUnmarshalStringDefault(b *testing.B) {
-	var m *string
+	var m *int
 
 	for i := 0; i < b.N; i++ {
-		json.Unmarshal([]byte(`"\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e Emoji!! \ud83d\udc4f \uD83D\uDC4C \ud83d\uDC7B"`), &m)
+		json.Unmarshal([]byte(`-124e7`), &m)
 	}
 }
 
 func TestNewTests1(t *testing.T) {
-	var a, b string
-	Unmarshal([]byte(`"\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e Emoji!! \ud83d\udc4f \uD83D\uDC4C \ud83d\uDC7B"`), &a)
-	UnmarshalJSON([]byte(`"\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e Emoji!! \ud83d\udc4f \uD83D\uDC4C \ud83d\uDC7B"`), &b)
-	require.Equal(t, a, b)
+	// fmt.Println(string(findInt([]byte(`"124.762`))))
+	// fmt.Println(string(findInt([]byte(`"124e762e2`))))
+	// fmt.Println(string(findInt([]byte(`"124e762e2`))))
+	// fmt.Println(string(findInt([]byte(`"-124.762`))))
+	// fmt.Println(string(findInt([]byte(`"-124e-762e-2`))))
+	// fmt.Println(string(findInt([]byte(`"-124e-762e2`))))
+
+	var m int
+	err := UnmarshalJSON([]byte(`"-124"`), &m)
+	fmt.Println(err)
+	fmt.Println(m)
+
+	// var a, b int
+	// Unmarshal([]byte(`-124e762`), &a)
+	// UnmarshalJSON([]byte(`-124e762`), &b)
+	// require.Equal(t, a, b)
 }
 
 // func BenchmarkNewTests3(b *testing.B) {

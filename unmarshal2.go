@@ -3,7 +3,6 @@ package gojson
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
 	"strconv"
 	"unsafe"
@@ -63,7 +62,7 @@ func setValue(b []byte, p reflect.Value) (err error) {
 
 	switch k {
 	case reflect.String:
-		p.SetString(toJSONString(b))
+		p.SetString(jsonToString(b))
 	case reflect.Int:
 		p.SetInt(int64(jsonToInt(b)))
 	case reflect.Float32, reflect.Float64:
@@ -85,66 +84,6 @@ type jsonTree struct {
 	dtype uint8
 }
 
-func jsonType(raw []byte) uint8 {
-	for i := 0; i < len(raw); i++ {
-		b := raw[i]
-		switch {
-		case b == '{':
-			return typeJSONObject
-		case b == '[':
-			return typeJSONArray
-		case b == '"':
-			return typeJSONString
-		case isJSONTrue(raw):
-			return typeJSONTrue
-		case isJSONFalse(raw):
-			return typeJSONFalse
-		case isJSONNull(raw):
-			return typeJSONNull
-		case !isWS(b):
-			return typeJSONErr
-		}
-	}
-
-	return typeJSONErr
-}
-
-func tokenize(raw []byte) (*jsonTree, error) {
-	state := stateBegin
-	for i := 0; i < len(raw); i++ {
-		b := raw[i]
-		switch state {
-		case stateBegin:
-			switch {
-			case b == '{':
-				state = stateObject
-			case b == '[':
-				state = stateArray
-			case b == '"':
-				state = stateString
-			case isJSONTrue(raw):
-				return &jsonTree{begin: i, end: i + 4, dtype: typeJSONTrue}, nil
-			case isJSONFalse(raw):
-				return &jsonTree{begin: i, end: i + 5, dtype: typeJSONFalse}, nil
-			case isJSONNull(raw):
-				return &jsonTree{begin: i, end: i + 4, dtype: typeJSONNull}, nil
-			case !isWS(b):
-				return nil, ErrMalformedJSON
-			}
-		case stateObject:
-			return &jsonTree{begin: i, end: i + 4, dtype: typeJSONObject}, nil
-		case stateArray:
-			return &jsonTree{begin: i, end: i + 4, dtype: typeJSONArray}, nil
-		case stateString:
-			return &jsonTree{begin: i, end: i + 4, dtype: typeJSONString}, nil
-		case stateNumber:
-			return &jsonTree{begin: i, end: i + 4, dtype: typeJSONNumber}, nil
-		}
-	}
-
-	return nil, nil
-}
-
 func isJSONTrue(b []byte) bool {
 	if len(b) < 4 {
 		return false
@@ -156,49 +95,6 @@ func isJSONTrue(b []byte) bool {
 		return false
 	}
 	if b[2] != 'u' && b[2] != 'U' {
-		return false
-	}
-	if b[3] != 'e' && b[3] != 'E' {
-		return false
-	}
-
-	return false
-}
-
-func isJSONNull(b []byte) bool {
-	if len(b) < 4 {
-		return false
-	}
-	if b[0] != 'n' && b[0] != 'N' {
-		return false
-	}
-	if b[1] != 'u' && b[1] != 'U' {
-		return false
-	}
-	if b[2] != 'l' && b[2] != 'L' {
-		return false
-	}
-	if b[3] != 'l' && b[3] != 'L' {
-		return false
-	}
-
-	return false
-}
-
-func isJSONFalse(b []byte) bool {
-	if len(b) < 5 {
-		return false
-	}
-	if b[0] != 'f' && b[0] != 'F' {
-		return false
-	}
-	if b[1] != 'a' && b[1] != 'A' {
-		return false
-	}
-	if b[2] != 'l' && b[2] != 'L' {
-		return false
-	}
-	if b[3] != 's' && b[3] != 'S' {
 		return false
 	}
 	if b[3] != 'e' && b[3] != 'E' {
@@ -263,19 +159,107 @@ func findString(raw []byte) []byte {
 	return raw[a:b]
 }
 
+func findNumber(raw []byte) ([]byte, string) {
+	a := 0
+	// Here we're trimming whitespace and finding an opening quote if it exists.
+	for i := 0; i < len(raw); i++ {
+		if isWS(raw[i]) {
+			a++
+			continue
+		}
+
+		if raw[i] == '"' {
+			a++
+			break
+		}
+
+		break
+	}
+
+	raw = raw[a:]
+
+	if len(raw) == 0 {
+		return nil, JSONInvalid
+	}
+
+	if len(raw) == 1 && raw[0] == '0' {
+		return nil, JSONInvalid
+	}
+
+	// It's not a valid number unless it begins with minus, or 1-9
+	end := 0
+	switch raw[0] {
+	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		end++
+	default:
+		return nil, JSONInvalid
+	}
+
+	e := false
+	eSign := false
+	period := false
+SEARCH:
+	for i := end; i < len(raw); i++ {
+		b := raw[i]
+		switch b {
+		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			end++
+			continue
+		case '"':
+			break SEARCH
+		case '-', '+':
+			if !e || eSign {
+				return nil, JSONInvalid
+			}
+			eSign = true
+			end++
+		case 'e', 'E':
+			if e {
+				return nil, JSONInvalid
+			}
+			e = true
+			end++
+		case '.':
+			if period {
+				return nil, JSONInvalid
+			}
+			period = true
+			end++
+		default:
+			return nil, JSONInvalid
+		}
+	}
+
+	if period || e {
+		return raw[:end], JSONFloat
+	}
+
+	return raw[:end], JSONInt
+}
+
 func jsonToInt(b []byte) int {
 	if isJSONTrue(b) {
 		return 1
 	}
 
-	b = findString(b)
+	b, t := findNumber(b)
 
-	i, err := strconv.ParseInt(*(*string)(unsafe.Pointer(&b)), 10, 64)
-	if err != nil {
-		log.Println(err)
+	if t == JSONInvalid {
 		return 0
 	}
-	return int(i)
+
+	if t == JSONInt {
+		i, err := strconv.ParseInt(*(*string)(unsafe.Pointer(&b)), 10, 64)
+		if err == nil {
+			return int(i)
+		}
+	}
+
+	f, err := strconv.ParseFloat(*(*string)(unsafe.Pointer(&b)), 64)
+	if err != nil {
+		return 0
+	}
+	return int(f)
 }
 
 func jsonToFloat(b []byte) float64 {
@@ -287,8 +271,7 @@ func jsonToFloat(b []byte) float64 {
 
 	i, err := strconv.ParseFloat(*(*string)(unsafe.Pointer(&b)), 64)
 	if err != nil {
-		log.Println(err)
-		return 0
+		panic(err)
 	}
 	return i
 }
@@ -312,7 +295,7 @@ func jsonToBool(b []byte) bool {
 }
 
 // Turn a quoted string into a non-quoted string, and fix any escape sequences.
-func toJSONString(raw []byte) string {
+func jsonToString(raw []byte) string {
 	start := 0
 
 	if len(raw) < 2 {
