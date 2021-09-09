@@ -434,6 +434,7 @@ func TestNewUnmarshalString(t *testing.T) {
 func BenchmarkNewUnmarshalString(b *testing.B) {
 	value := []byte(massiveQuotedString)
 	smallValue := []byte(`"\u2018Hello there.\u2019, \u003cGeneral Kenobi\u003e"`)
+	tinyValue := []byte(`"Simple String"`)
 
 	b.Run("DefaultMassive", func(b *testing.B) {
 		var m *string
@@ -495,6 +496,39 @@ func BenchmarkNewUnmarshalString(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			err := UnmarshalJSON(smallValue, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("DefaultTiny", func(b *testing.B) {
+		var m *string
+
+		for i := 0; i < b.N; i++ {
+			err := json.Unmarshal(tinyValue, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("OldTiny", func(b *testing.B) {
+		var m *string
+
+		for i := 0; i < b.N; i++ {
+			err := Unmarshal(tinyValue, &m)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("NewTiny", func(b *testing.B) {
+		var m *string
+
+		for i := 0; i < b.N; i++ {
+			err := UnmarshalJSON(tinyValue, &m)
 			if err != nil {
 				log.Fatal(err)
 			}
