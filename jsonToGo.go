@@ -123,12 +123,14 @@ func findString(raw []byte) []byte {
 	return raw[a:b]
 }
 
-func jsonToInt(b []byte) int {
+func jsonToInt(b []byte, t string) int {
 	if isJSONTrue(b) {
 		return 1
 	}
 
-	b, t := findNumber(b)
+	if t == "" {
+		b, t = findNumber(b)
+	}
 
 	if t == JSONInvalid {
 		return 0
@@ -148,12 +150,14 @@ func jsonToInt(b []byte) int {
 	return int(f)
 }
 
-func jsonToFloat(b []byte) float64 {
+func jsonToFloat(b []byte, t string) float64 {
 	if isJSONTrue(b) {
 		return 1.0
 	}
 
-	b, t := findNumber(b)
+	if t == "" {
+		b, t = findNumber(b)
+	}
 
 	if t == JSONInvalid {
 		return 0
@@ -304,5 +308,124 @@ func jsonToString(raw []byte) string {
 		i++
 	}
 
-	return string(out[:end])
+	final := out[:end]
+	return *(*string)(unsafe.Pointer(&final))
+}
+
+// infer the json type from the first non-whitespace character.
+func jsonType(raw []byte) string {
+	if len(raw) == 0 {
+		return JSONInvalid
+	}
+
+	a := 0
+
+	for i := 0; i < len(raw); i++ {
+		if isWS(raw[i]) {
+			a++
+			continue
+		}
+
+		break
+	}
+
+	if len(raw) == 0 {
+		return JSONInvalid
+	}
+
+	if len(raw[a:]) == 1 && raw[a] == '0' {
+		return JSONInt
+	}
+
+	switch raw[a] {
+	case '{':
+		return JSONObject
+	case '[':
+		return JSONArray
+	case '"':
+		return JSONString
+	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		_, t := findNumber(raw)
+		return t
+	case 't', 'T':
+		if isJSONTrue(raw) {
+			return JSONBool
+		}
+
+		return JSONInvalid
+	case 'f', 'F':
+		if isJSONFalse(raw) {
+			return JSONBool
+		}
+
+		return JSONInvalid
+	case 'n', 'N':
+		if isJSONNull(raw) {
+			return JSONBool
+		}
+
+		return JSONInvalid
+	}
+
+	return JSONInvalid
+}
+
+func jsonToIface(raw []byte) interface{} {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	a := 0
+
+	for i := 0; i < len(raw); i++ {
+		if isWS(raw[i]) {
+			a++
+			continue
+		}
+
+		break
+	}
+
+	if len(raw) == 0 {
+		return nil
+	}
+
+	switch raw[a] {
+	case '{':
+		// @todo
+	case '[':
+		// @todo
+	case '"':
+		a := jsonToString(raw)
+		return a
+		// return jsonToString(raw)
+	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		b, t := findNumber(raw)
+		if t == JSONInt {
+			return jsonToInt(b, t)
+		}
+
+		if t == JSONFloat {
+			return jsonToFloat(b, t)
+		}
+
+		return jsonToString(raw)
+
+	case '0':
+		return 0
+	case 't', 'T':
+		if isJSONTrue(raw) {
+			return true
+		}
+	case 'f', 'F':
+		if isJSONFalse(raw) {
+			return false
+		}
+	case 'n', 'N':
+		if isJSONNull(raw) {
+			return false
+		}
+	}
+
+	return jsonToString(raw)
 }

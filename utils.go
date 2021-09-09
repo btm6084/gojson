@@ -37,13 +37,17 @@ func panicOrigin(raw []byte) string {
 	// 1-2 are debug.Stack itself.
 	// 3-4 are this file's PanicRecovery function.
 	// 5-6 are runtime.Panic
-	// 7-8 are the origination, where 8 has the info we need.
 
-	if len(stack) < 9 {
-		return "unknown panic"
+	for i := 0; i < len(stack); i++ {
+		if i < 5 {
+			continue
+		}
+		if strings.Contains(string(stack[i]), "gojson/") {
+			return strings.TrimSpace(string(stack[i]))
+		}
 	}
 
-	return strings.TrimSpace(string(stack[8]))
+	return "unknown panic"
 }
 
 // Truncate returns a truncated byte slice if the length of the original slice is greater
