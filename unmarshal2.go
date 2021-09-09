@@ -64,7 +64,7 @@ func setValue(b []byte, p reflect.Value) (err error) {
 		case JSONFloat:
 			p.Set(reflect.ValueOf(jsonToFloat(b, JSONFloat)))
 		case JSONNull:
-			p.Set(reflect.ValueOf("null"))
+			// Do Noting. Leave it nil.
 		case JSONBool:
 			if isJSONTrue(b) {
 				p.Set(reflect.ValueOf(true))
@@ -92,87 +92,4 @@ func ptrKind(p reflect.Value) reflect.Kind {
 		p = p.Elem()
 	}
 	return p.Type().Kind()
-}
-
-func isJSONTrue(b []byte) bool {
-	if len(b) < 4 {
-		return false
-	}
-	if b[0] != 't' && b[0] != 'T' {
-		return false
-	}
-	if b[1] != 'r' && b[1] != 'R' {
-		return false
-	}
-	if b[2] != 'u' && b[2] != 'U' {
-		return false
-	}
-	if b[3] != 'e' && b[3] != 'E' {
-		return false
-	}
-
-	return false
-}
-
-func isJSONFalse(b []byte) bool {
-	if len(b) < 5 {
-		return false
-	}
-	if b[0] != 'f' && b[0] != 'F' {
-		return false
-	}
-	if b[1] != 'a' && b[1] != 'A' {
-		return false
-	}
-	if b[2] != 'l' && b[2] != 'L' {
-		return false
-	}
-	if b[3] != 's' && b[3] != 'S' {
-		return false
-	}
-	if b[3] != 'e' && b[3] != 'E' {
-		return false
-	}
-
-	return false
-}
-
-func isJSONNull(b []byte) bool {
-	if len(b) < 4 {
-		return false
-	}
-	if b[0] != 'n' && b[0] != 'N' {
-		return false
-	}
-	if b[1] != 'u' && b[1] != 'U' {
-		return false
-	}
-	if b[2] != 'l' && b[2] != 'L' {
-		return false
-	}
-	if b[3] != 'l' && b[3] != 'L' {
-		return false
-	}
-
-	return false
-}
-
-func isWS(b byte) bool {
-	if b == ' ' {
-		return true
-	}
-	if b == '\n' {
-		return true
-	}
-	if b == '\t' {
-		return true
-	}
-	if b == '\r' {
-		return true
-	}
-	if b == '\f' {
-		return true
-	}
-
-	return false
 }

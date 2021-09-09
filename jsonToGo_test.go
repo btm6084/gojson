@@ -8,6 +8,388 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestNewUnmarshalInterface(t *testing.T) {
+	t.Run("int", func(t *testing.T) {
+		var a, b, c interface{}
+		value := []byte(`12345`)
+		expected := 12345
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+		require.Equal(t, expected, a)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+		require.Equal(t, expected, b)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+		require.Equal(t, float64(expected), c)
+
+		require.Equal(t, a, b)
+	})
+
+	t.Run("float", func(t *testing.T) {
+		var a, b, c interface{}
+		value := []byte(`12.345`)
+		expected := 12.345
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+		require.Equal(t, expected, a)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+		require.Equal(t, expected, b)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+		require.Equal(t, float64(expected), c)
+
+		require.Equal(t, a, b)
+	})
+
+	t.Run("string", func(t *testing.T) {
+		var a, b, c interface{}
+		value := []byte(`"Emoji!! \ud83d\udc4f \uD83D\uDC4C \ud83d\uDC7B"`)
+		expected := `Emoji!! 👏 👌 👻`
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+		require.Equal(t, expected, a)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+		require.Equal(t, expected, b)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+		require.Equal(t, expected, c)
+
+		require.Equal(t, a, b)
+	})
+
+	t.Run("true", func(t *testing.T) {
+		var a, b, c interface{}
+		value := []byte(`true`)
+		expected := true
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+		require.Equal(t, expected, a)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+		require.Equal(t, expected, b)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+		require.Equal(t, expected, c)
+
+		require.Equal(t, a, b)
+	})
+
+	t.Run("false", func(t *testing.T) {
+		var a, b, c interface{}
+		value := []byte(`false`)
+		expected := false
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+		require.Equal(t, expected, a)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+		require.Equal(t, expected, b)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+		require.Equal(t, expected, c)
+
+		require.Equal(t, a, b)
+	})
+
+	t.Run("null", func(t *testing.T) {
+		var a, b, c interface{}
+		value := []byte(`null`)
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+		require.Nil(t, a)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+		require.Nil(t, b)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+		require.Nil(t, c)
+
+		require.Equal(t, a, b)
+	})
+}
+
+func BenchmarkNewUnmarshalInterface(b *testing.B) {
+	b.Run("Interface String", func(b *testing.B) {
+		value := []byte(`"This is a string"`)
+
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := json.Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := UnmarshalJSON(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+
+	b.Run("Interface Int", func(b *testing.B) {
+		value := []byte(`12345`)
+
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := json.Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := UnmarshalJSON(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+
+	b.Run("Interface Float", func(b *testing.B) {
+		value := []byte(`12.345`)
+
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := json.Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := UnmarshalJSON(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+
+	b.Run("Interface False", func(b *testing.B) {
+		value := []byte(`false`)
+
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := json.Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := UnmarshalJSON(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+
+	b.Run("Interface True", func(b *testing.B) {
+		value := []byte(`true`)
+
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := json.Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := UnmarshalJSON(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+
+	b.Run("Interface Null", func(b *testing.B) {
+		value := []byte(`null`)
+
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := json.Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := UnmarshalJSON(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+
+	b.Run("Interface Zero", func(b *testing.B) {
+		value := []byte(`0`)
+
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := json.Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := Unmarshal(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m interface{}
+
+				err := UnmarshalJSON(value, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+}
+
 func TestNewUnmarshalString(t *testing.T) {
 	t.Run("Massive", func(t *testing.T) {
 		var a, b, c string
@@ -466,297 +848,4 @@ func BenchmarkNewUnmarshalBool(b *testing.B) {
 			UnmarshalJSON(value, &m)
 		}
 	})
-}
-
-func TestNewUnmarshalInterface(t *testing.T) {
-	t.Run("int", func(t *testing.T) {
-		var a, b, c interface{}
-		value := []byte(`12345`)
-
-		err := UnmarshalJSON(value, &a)
-		require.Nil(t, err)
-		require.Equal(t, 12345, a)
-
-		err = Unmarshal(value, &b)
-		require.Nil(t, err)
-		require.Equal(t, 12345, b)
-
-		err = json.Unmarshal(value, &c)
-		require.Nil(t, err)
-		require.Equal(t, float64(12345), c)
-
-		require.Equal(t, a, b)
-	})
-}
-
-func TestSpecial(t *testing.T) {
-	var m interface{}
-	value := []byte(`"This is a string"`)
-
-	err := UnmarshalJSON(value, &m)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func BenchmarkNewUnmarshalInterface(b *testing.B) {
-	b.Run("Interface String", func(b *testing.B) {
-		value := []byte(`"This is a string"`)
-
-		b.Run("Default", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := json.Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("Old", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("New", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := UnmarshalJSON(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-	})
-
-	b.Run("Interface Int", func(b *testing.B) {
-		value := []byte(`12345`)
-
-		b.Run("Default", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := json.Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("Old", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("New", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := UnmarshalJSON(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-	})
-
-	b.Run("Interface Float", func(b *testing.B) {
-		value := []byte(`12.345`)
-
-		b.Run("Default", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := json.Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("Old", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("New", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := UnmarshalJSON(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-	})
-
-	b.Run("Interface False", func(b *testing.B) {
-		value := []byte(`false`)
-
-		b.Run("Default", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := json.Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("Old", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("New", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := UnmarshalJSON(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-	})
-
-	b.Run("Interface True", func(b *testing.B) {
-		value := []byte(`true`)
-
-		b.Run("Default", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := json.Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("Old", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("New", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := UnmarshalJSON(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-	})
-
-	b.Run("Interface Null", func(b *testing.B) {
-		value := []byte(`null`)
-
-		b.Run("Default", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := json.Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("Old", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("New", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := UnmarshalJSON(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-	})
-
-	b.Run("Interface Zero", func(b *testing.B) {
-		value := []byte(`0`)
-
-		b.Run("Default", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := json.Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("Old", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := Unmarshal(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-
-		b.Run("New", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				var m interface{}
-
-				err := UnmarshalJSON(value, &m)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		})
-	})
-
 }

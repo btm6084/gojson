@@ -5,6 +5,90 @@ import (
 	"unsafe"
 )
 
+func isJSONTrue(b []byte) bool {
+	if len(b) < 4 {
+		return false
+	}
+	if b[0] != 't' && b[0] != 'T' {
+		return false
+	}
+	if b[1] != 'r' && b[1] != 'R' {
+		return false
+	}
+	if b[2] != 'u' && b[2] != 'U' {
+		return false
+	}
+	if b[3] != 'e' && b[3] != 'E' {
+		return false
+	}
+
+	return true
+}
+
+func isJSONFalse(b []byte) bool {
+	if len(b) < 5 {
+		return false
+	}
+	if b[0] != 'f' && b[0] != 'F' {
+		return false
+	}
+	if b[1] != 'a' && b[1] != 'A' {
+		return false
+	}
+	if b[2] != 'l' && b[2] != 'L' {
+		return false
+	}
+	if b[3] != 's' && b[3] != 'S' {
+		return false
+	}
+	if b[4] != 'e' && b[4] != 'E' {
+		return false
+	}
+
+	return true
+}
+
+func isJSONNull(b []byte) bool {
+	if len(b) < 4 {
+		return false
+	}
+
+	if b[0] != 'n' && b[0] != 'N' {
+		return false
+	}
+	if b[1] != 'u' && b[1] != 'U' {
+		return false
+	}
+	if b[2] != 'l' && b[2] != 'L' {
+		return false
+	}
+	if b[3] != 'l' && b[3] != 'L' {
+		return false
+	}
+
+	return true
+}
+
+func isWS(b byte) bool {
+	if b == ' ' {
+		return true
+	}
+	if b == '\n' {
+		return true
+	}
+	if b == '\t' {
+		return true
+	}
+	if b == '\r' {
+		return true
+	}
+	if b == '\f' {
+		return true
+	}
+
+	return false
+}
+
 // findNumber trims leading and trailing whitepsace, and returns the byte string
 // representation of a number along with the number type (Int, Float, or Invalid).
 // If raw is a quoted string, the quotes are removed.
@@ -348,20 +432,20 @@ func jsonType(raw []byte) string {
 		_, t := findNumber(raw)
 		return t
 	case 't', 'T':
-		if isJSONTrue(raw) {
+		if isJSONTrue(raw[a:]) {
 			return JSONBool
 		}
 
 		return JSONInvalid
 	case 'f', 'F':
-		if isJSONFalse(raw) {
+		if isJSONFalse(raw[a:]) {
 			return JSONBool
 		}
 
 		return JSONInvalid
 	case 'n', 'N':
-		if isJSONNull(raw) {
-			return JSONBool
+		if isJSONNull(raw[a:]) {
+			return JSONNull
 		}
 
 		return JSONInvalid
