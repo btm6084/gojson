@@ -877,7 +877,58 @@ func BenchmarkNewUnmarshalBool(b *testing.B) {
 func TestNewUnmarshalMap(t *testing.T) {
 	t.Run("ints", func(t *testing.T) {
 		var a, b, c []int
-		value := []byte(`    [123, 234, 345,        456, 567, 678, 789, 890, 901, 1012]   `)
+		value := []byte(`[123,234,345,456,567,678,789,890,901,1012]`)
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+
+		require.Equal(t, a, b, "a, b")
+		require.Equal(t, a, c, "a, c")
+		require.Equal(t, b, c, "b, c")
+	})
+	t.Run("floats", func(t *testing.T) {
+		var a, b, c []float64
+		value := []byte(`[12.3,2.34,34.5,4.56,56.7,6.78,78.9,8.90,90.1,10.12]`)
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+
+		require.Equal(t, a, b, "a, b")
+		require.Equal(t, a, c, "a, c")
+		require.Equal(t, b, c, "b, c")
+	})
+	t.Run("strings", func(t *testing.T) {
+		var a, b, c []string
+		value := []byte(`["123","234","345","456","567","678","789","890","901","1012"]`)
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+
+		require.Equal(t, a, b, "a, b")
+		require.Equal(t, a, c, "a, c")
+		require.Equal(t, b, c, "b, c")
+	})
+	t.Run("bools", func(t *testing.T) {
+		var a, b, c []bool
+		value := []byte(`[true,false,true,false,true,false,true,false,true,false]`)
 
 		err := UnmarshalJSON(value, &a)
 		require.Nil(t, err)
