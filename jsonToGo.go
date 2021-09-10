@@ -455,12 +455,132 @@ func jsonType(raw []byte) string {
 	return JSONInvalid
 }
 
-func jsonToIface(raw []byte) interface{} {
-	if len(raw) == 0 {
-		return nil
+// func jsonToIface(raw []byte) interface{} {
+// 	if len(raw) == 0 {
+// 		return nil
+// 	}
+
+// 	a := 0
+
+// 	for i := 0; i < len(raw); i++ {
+// 		if isWS(raw[i]) {
+// 			a++
+// 			continue
+// 		}
+
+// 		break
+// 	}
+
+// 	if len(raw) == 0 {
+// 		return nil
+// 	}
+
+// 	switch raw[a] {
+// 	case '{':
+// 		// @todo
+// 	case '[':
+// 		// @todo
+// 	case '"':
+// 		a := jsonToString(raw)
+// 		return a
+// 		// return jsonToString(raw)
+// 	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+// 		b, t := findNumber(raw)
+// 		if t == JSONInt {
+// 			return jsonToInt(b, t)
+// 		}
+
+// 		if t == JSONFloat {
+// 			return jsonToFloat(b, t)
+// 		}
+
+// 		return jsonToString(raw)
+
+// 	case '0':
+// 		return 0
+// 	case 't', 'T':
+// 		if isJSONTrue(raw) {
+// 			return true
+// 		}
+// 	case 'f', 'F':
+// 		if isJSONFalse(raw) {
+// 			return false
+// 		}
+// 	case 'n', 'N':
+// 		if isJSONNull(raw) {
+// 			return false
+// 		}
+// 	}
+
+// 	return jsonToString(raw)
+// }
+
+func countSliceMembers2(raw []byte) int {
+	a, b := trimWS(raw, true)
+
+	_ = b
+
+	if len(raw[a:]) < 3 {
+		// 3 Bytes: Open Bracket, Close Bracket, and 1 member.
+		return 0
 	}
 
+	if raw[a] != '[' || raw[b] != ']' {
+		// Not a slice.
+		return 0
+	}
+
+	a++ // Consume open bracket.
+	b-- // Consume close bracket.
+
+	raw = raw[a : b+1]
+	count := 0
+
+MEMBERS:
+	for {
+		raw = raw[firstNonWSByte(raw):]
+		switch raw[0] {
+		case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0':
+			term := firstTerminator(raw)
+			count++
+			if term == len(raw)-1 {
+				break MEMBERS
+			}
+
+			raw = raw[term+1:]
+		default:
+			break MEMBERS
+		}
+	}
+
+	return count
+}
+
+func firstTerminator(raw []byte) int {
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == ',' {
+			return i
+		}
+	}
+
+	return len(raw) - 1
+}
+
+func firstNonWSByte(raw []byte) int {
+	for i := 0; i < len(raw); i++ {
+		if isWS(raw[i]) {
+			continue
+		}
+
+		return i
+	}
+
+	return 0
+}
+
+func trimWS(raw []byte, unquote bool) (int, int) {
 	a := 0
+	b := len(raw) - 1
 
 	for i := 0; i < len(raw); i++ {
 		if isWS(raw[i]) {
@@ -468,49 +588,27 @@ func jsonToIface(raw []byte) interface{} {
 			continue
 		}
 
+		if unquote && raw[i] == '"' {
+			a++
+			break
+		}
+
 		break
 	}
 
-	if len(raw) == 0 {
-		return nil
+	for i := len(raw) - 1; i >= 0; i-- {
+		if isWS(raw[i]) {
+			b--
+			continue
+		}
+
+		if unquote && raw[i] == '"' {
+			b--
+			break
+		}
+
+		break
 	}
 
-	switch raw[a] {
-	case '{':
-		// @todo
-	case '[':
-		// @todo
-	case '"':
-		a := jsonToString(raw)
-		return a
-		// return jsonToString(raw)
-	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		b, t := findNumber(raw)
-		if t == JSONInt {
-			return jsonToInt(b, t)
-		}
-
-		if t == JSONFloat {
-			return jsonToFloat(b, t)
-		}
-
-		return jsonToString(raw)
-
-	case '0':
-		return 0
-	case 't', 'T':
-		if isJSONTrue(raw) {
-			return true
-		}
-	case 'f', 'F':
-		if isJSONFalse(raw) {
-			return false
-		}
-	case 'n', 'N':
-		if isJSONNull(raw) {
-			return false
-		}
-	}
-
-	return jsonToString(raw)
+	return a, b
 }
