@@ -2,11 +2,10 @@ package gojson
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"unsafe"
-
-	"github.com/davecgh/go-spew/spew"
 )
 
 func isJSONTrue(b []byte) bool {
@@ -176,13 +175,10 @@ SEARCH:
 }
 
 // findString trims leading and trailing whitepsace, and removes the leading
-// and trailing double quote if it exists. Non-validating.
-func findString(raw []byte) ([]byte, bool) {
+// and trailing double quote if it exists.
+func findString(raw []byte) ([]byte, error) {
 	a := 0
 	b := len(raw)
-
-	open := false
-	close := false
 
 	for i := 0; i < len(raw); i++ {
 		if isWS(raw[i]) {
@@ -192,15 +188,15 @@ func findString(raw []byte) ([]byte, bool) {
 
 		if raw[i] == '"' {
 			a++
-			open = true
 			break
 		}
 
-		break
+		return nil, fmt.Errorf("expected string at position %d in segment '%s'", i, truncate(raw, 50))
 	}
 
 	raw = raw[a:]
 
+	found := false
 	for i := 0; i < len(raw); i++ {
 		if raw[i] == '\\' {
 			if i >= len(raw)-1 {
@@ -214,12 +210,17 @@ func findString(raw []byte) ([]byte, bool) {
 
 		if raw[i] == '"' {
 			b = i
-			close = true
+			found = true
 			break
 		}
 	}
 
-	return raw[:b], open && close
+	if !found {
+		return nil, fmt.Errorf("expected string to terminate in segment '%s'", truncate(raw, 50))
+	}
+
+	fmt.Println(string(raw[:b]))
+	return raw[:b], nil
 }
 
 func jsonToInt(b []byte, t string) int {
@@ -276,18 +277,19 @@ func jsonToFloat(b []byte, t string) float64 {
 	return f
 }
 
-func jsonToBool(b []byte) bool {
-	b, _ = findString(b)
+func jsonToBool(raw []byte) bool {
+	a, b := trimWS(raw, true)
+	raw = raw[a:b]
 
-	if isJSONTrue(b) {
+	if isJSONTrue(raw) {
 		return true
 	}
 
-	if len(b) == 1 && b[0] == '0' {
+	if len(raw) == 1 && raw[0] == '0' {
 		return false
 	}
 
-	out, err := strconv.ParseBool(*(*string)(unsafe.Pointer(&b)))
+	out, err := strconv.ParseBool(*(*string)(unsafe.Pointer(&raw)))
 	if err != nil {
 		return false
 	}
@@ -469,32 +471,9 @@ func jsonType(raw []byte) string {
 	return JSONInvalid
 }
 
-// Find the position after the first comma or end of line.
-func firstTerminator(raw []byte) int {
-	for i := 0; i < len(raw); i++ {
-		if raw[i] == ',' {
-			return i + 1
-		}
-	}
-
-	return len(raw) - 1
-}
-
-func firstNonWSByte(raw []byte) int {
-	for i := 0; i < len(raw); i++ {
-		if isWS(raw[i]) {
-			continue
-		}
-
-		return i
-	}
-
-	return 0
-}
-
 func trimWS(raw []byte, unquote bool) (int, int) {
 	a := 0
-	b := len(raw) - 1
+	b := len(raw)
 
 	for i := 0; i < len(raw); i++ {
 		if isWS(raw[i]) {
@@ -527,19 +506,23 @@ func trimWS(raw []byte, unquote bool) (int, int) {
 	return a, b
 }
 
-func unmarshalSlice(b []byte, p reflect.Value) (err error) {
+func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 	// Check if p implements the json.Unmarshaler interface.
 	if p.CanAddr() && p.Addr().NumMethod() > 0 {
 		if u, ok := p.Addr().Interface().(PostUnmarshaler); ok {
-			defer func() { err = u.PostUnmarshalJSON(b, err) }()
+			defer func() { err = u.PostUnmarshalJSON(raw, err) }()
 		}
 		if u, ok := p.Addr().Interface().(json.Unmarshaler); ok {
-			err = u.UnmarshalJSON(b)
+			err = u.UnmarshalJSON(raw)
 			return
 		}
 	}
 
-	t := jsonType(b)
+	a, b := trimWS(raw, false)
+	raw = raw[a:b]
+
+	t := jsonType(raw)
+
 	childType := p.Type().Elem().Kind()
 
 	// ByteSlices are exceptionally hard to extract byte-by-byte given the difficulty
@@ -547,20 +530,140 @@ func unmarshalSlice(b []byte, p reflect.Value) (err error) {
 	// short-circuiting and treating it as if the whole array were an elemental type.
 	if childType == reflect.Uint8 {
 		if t == JSONString {
-			b, _ = findString(b)
+			raw, err = findString(raw)
+			if err != nil {
+				panic(err)
+			}
+
+			a, b := trimWS(raw, true)
+			raw = raw[a:b]
 		}
-		p.Set(reflect.ValueOf(b))
+		p.Set(reflect.ValueOf(raw))
 		return nil
 	}
 
-	// Count the member elements so that we can know how big to size our slice.
-	length := countMembers(b, t)
-
+	length := countMembers(raw, t)
 	if length < 1 {
 		return nil
 	}
 
-	spew.Dump(length)
+	slice := reflect.MakeSlice(p.Type(), length, length)
+
+	if t == JSONObject || t == JSONArray {
+		raw = raw[1:] // Consume the opening bracket/brace.
+	}
+
+	for i := 0; i < length; i++ {
+		b, ct, err := getValue(raw)
+		if err != nil {
+			panic(err)
+		}
+
+		raw = raw[len(b):]
+		raw = raw[afterNextComma(raw):]
+
+		sliceMember := slice.Index(i)
+		child := resolvePtr(sliceMember)
+
+		fmt.Println(string(b), ct)
+
+		switch child.Kind() {
+		case reflect.Map:
+		case reflect.Slice:
+		case reflect.Struct:
+		case reflect.Interface:
+		default:
+		}
+	}
 
 	return nil
+}
+
+func afterNextComma(raw []byte) int {
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == ',' {
+			return i + 1
+		}
+	}
+
+	return len(raw) - 1
+}
+
+// Find the next value up to a terminator
+func getValue(raw []byte) ([]byte, string, error) {
+	a := 0
+	for i := 0; i < len(raw); i++ {
+		if isWS(raw[i]) {
+			a++
+			continue
+		}
+		break
+	}
+
+	raw = raw[a:]
+
+	if len(raw) == 0 {
+		return nil, JSONInvalid, ErrMalformedJSON
+	}
+
+	if len(raw) == 1 && raw[0] == 0 {
+		return raw, JSONInt, nil
+	}
+
+	switch raw[0] {
+	case '{':
+		panic("Object Not Implemented")
+	case '[':
+		panic("Array Not Implemented")
+	case '"':
+		b, err := findString(raw)
+		if err != nil {
+			return nil, JSONString, err
+		}
+
+		return b, "", nil
+	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		b, t := findNumber(raw)
+		if t == JSONInvalid {
+			return nil, t, fmt.Errorf("expected number in segment '%s'", truncate(raw, 50))
+		}
+
+		return b, t, nil
+	case 't', 'T':
+		if len(raw) < 4 || !isJSONTrue(raw[:4]) {
+			return nil, JSONInvalid, fmt.Errorf("expected json `true` in segment '%s'", truncate(raw, 50))
+		}
+		return raw[:4], JSONBool, nil
+	case 'f', 'F':
+		if len(raw) < 5 || !isJSONFalse(raw[:5]) {
+			return nil, JSONInvalid, fmt.Errorf("expected json `false` in segment '%s'", truncate(raw, 50))
+		}
+		return raw[:5], JSONBool, nil
+	case 'n', 'N':
+		if len(raw) < 4 || !isJSONNull(raw[:4]) {
+			return nil, JSONInvalid, fmt.Errorf("expected json `null` in segment '%s'", truncate(raw, 50))
+		}
+		return raw[:4], JSONNull, nil
+	}
+
+	return nil, JSONInvalid, ErrMalformedJSON
+
+	// switch {
+	// case len(raw) < 1:
+	// 	return "", ErrMalformedJSON
+	// case raw[0] == '{': // Objects
+	// 	//return findObject(raw)
+	// case raw[0] == '[': // Arrays
+	// 	//return findArray(raw)
+	// case raw[start] == '"':
+	// 	return extractString(raw, start)
+	// case isDigit(raw[start]) || raw[start] == '-':
+	// 	return extractNumber(raw, start)
+	// case len(raw[start:]) >= 4 && (IsJSONTrue(raw[start:start+4]) || IsJSONNull(raw[start:start+4])):
+	// 	return extractConstant(raw, start)
+	// case len(raw[start:]) >= 5 && IsJSONFalse(raw[start:start+5]):
+	// 	return extractConstant(raw, start)
+	// default:
+	// 	return "", fmt.Errorf("invalid character '%s' at position '%d' in segment '%s'", string(raw[start]), start, raw)
+	// }
 }
