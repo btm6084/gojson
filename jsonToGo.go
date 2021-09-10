@@ -296,6 +296,35 @@ func jsonToBool(raw []byte) bool {
 	return out
 }
 
+func jsonToIface(b []byte) interface{} {
+	if len(b) == 1 && b[0] == '0' {
+		return int(0)
+	}
+
+	switch jsonType(b) {
+	case JSONString:
+		return jsonToString(b)
+	case JSONInt:
+		return jsonToInt(b, JSONInt)
+	case JSONFloat:
+		return jsonToFloat(b, JSONFloat)
+	case JSONNull:
+		return nil
+	case JSONBool:
+		if isJSONTrue(b) {
+			return true
+		} else {
+			return false
+		}
+	case JSONArray:
+		// @TODO
+	case JSONObject:
+		// @TODO
+	}
+
+	return nil
+}
+
 // Turn a quoted string into a non-quoted string, and fix any escape sequences.
 func jsonToString(raw []byte) string {
 	start := 0

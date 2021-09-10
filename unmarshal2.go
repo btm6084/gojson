@@ -54,29 +54,9 @@ func setValue(b []byte, p reflect.Value) (err error) {
 	case reflect.Uint8, reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		p.SetUint(uint64(jsonToInt(b, "")))
 	case reflect.Interface:
-		if len(b) == 1 && b[0] == '0' {
-			p.Set(reflect.ValueOf(0))
-			break
-		}
-		switch jsonType(b) {
-		case JSONString:
-			p.Set(reflect.ValueOf(jsonToString(b)))
-		case JSONInt:
-			p.Set(reflect.ValueOf(jsonToInt(b, JSONInt)))
-		case JSONFloat:
-			p.Set(reflect.ValueOf(jsonToFloat(b, JSONFloat)))
-		case JSONNull:
-			// Do Noting. Leave it nil.
-		case JSONBool:
-			if isJSONTrue(b) {
-				p.Set(reflect.ValueOf(true))
-			} else {
-				p.Set(reflect.ValueOf(false))
-			}
-		case JSONArray:
-			// @TODO
-		case JSONObject:
-			// @TODO
+		v := jsonToIface(b)
+		if v != nil {
+			p.Set(reflect.ValueOf(v))
 		}
 	}
 
