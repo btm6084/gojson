@@ -40,7 +40,7 @@ func setValue(b []byte, p reflect.Value) (err error) {
 
 	switch k {
 	case reflect.Slice:
-		countSliceMembers2(b)
+		unmarshalSlice(b, p)
 	case reflect.String:
 		p.SetString(jsonToString(b))
 	case reflect.Int:

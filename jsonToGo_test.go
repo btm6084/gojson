@@ -884,23 +884,17 @@ func BenchmarkNewUnmarshalBool(b *testing.B) {
 	})
 }
 
-func TestNewUnmarshalCountMembers(t *testing.T) {
-	t.Run("ints", func(t *testing.T) {
-		value := []byte(`[123, 234, 345, 456, 567, 678, 789, 890, 901, 1012]`)
-		require.Equal(t, 10, countSliceMembers2(value))
-	})
-}
-
 func TestNewUnmarshalMap(t *testing.T) {
 	t.Run("ints", func(t *testing.T) {
-		var a, b, c []int
-		value := []byte(`    [123, 234, 345,        456, 567, 678      , 789, 890, 901, 1012]   `)
+		var a, b []int
+		// value := []byte(`    [123, 234, 345,        456, 567, 678      , 789, 890, 901, 1012]   `)
+		value := []byte(`["123", "234", "345", "456", "567", "678", "789", "890", "901", "1012"]`)
 
 		err := UnmarshalJSON(value, &a)
 		require.Nil(t, err)
 
-		_ = b
-		_ = c
+		// err = Unmarshal(value, &b)
+		// require.Nil(t, err)
 
 		// err = Unmarshal(value, &b)
 		// require.Nil(t, err)
@@ -908,23 +902,19 @@ func TestNewUnmarshalMap(t *testing.T) {
 		// err = json.Unmarshal(value, &c)
 		// require.Nil(t, err)
 
-		// require.Equal(t, a, b, "a, b")
+		require.Equal(t, a, b, "a, b")
 		// require.Equal(t, a, c, "a, c")
 		// require.Equal(t, b, c, "b, c")
 	})
 }
 
 func BenchmarkNewUnmarshalMap(b *testing.B) {
-	ints := []byte(`    [123, 234, 345,        456, 567, 678      , 789, 890, 901, 1012]   `)
+	ints := []byte(`["123", "234", "345", "456", "567", "678", "789", "890", "901", "1012"]`)
 
 	b.Run("Old", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			countSliceMembers(ints)
-		}
-	})
-	b.Run("New", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			countSliceMembers2(ints)
+			var m []int
+			Unmarshal(ints, &m)
 		}
 	})
 }

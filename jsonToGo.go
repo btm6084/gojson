@@ -1,8 +1,12 @@
 package gojson
 
 import (
+	"encoding/json"
+	"reflect"
 	"strconv"
 	"unsafe"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 func isJSONTrue(b []byte) bool {
@@ -92,7 +96,7 @@ func isWS(b byte) bool {
 // Find a number:
 // 1) Trim all leading whitespace.
 // 2) If it's a quoted string, ignore the opening quote.
-// 3) Read until you find an invalid number byte, and return the type of number found.
+// 3) Read until you find an invalid number byte or a terminal character, and return the found type.
 func findNumber(raw []byte) ([]byte, string) {
 	a := 0
 	// Here we're trimming whitespace and finding an opening quote if it exists.
@@ -173,9 +177,12 @@ SEARCH:
 
 // findString trims leading and trailing whitepsace, and removes the leading
 // and trailing double quote if it exists. Non-validating.
-func findString(raw []byte) []byte {
+func findString(raw []byte) ([]byte, bool) {
 	a := 0
 	b := len(raw)
+
+	open := false
+	close := false
 
 	for i := 0; i < len(raw); i++ {
 		if isWS(raw[i]) {
@@ -185,27 +192,34 @@ func findString(raw []byte) []byte {
 
 		if raw[i] == '"' {
 			a++
+			open = true
 			break
 		}
 
 		break
 	}
 
-	for i := len(raw) - 1; i >= 0; i-- {
-		if isWS(raw[i]) {
-			b--
-			continue
+	raw = raw[a:]
+
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == '\\' {
+			if i >= len(raw)-1 {
+				continue
+			}
+
+			if raw[i+1] == '"' {
+				i++ // consume the escaped quote
+			}
 		}
 
 		if raw[i] == '"' {
-			b--
+			b = i
+			close = true
 			break
 		}
-
-		break
 	}
 
-	return raw[a:b]
+	return raw[:b], open && close
 }
 
 func jsonToInt(b []byte, t string) int {
@@ -263,7 +277,7 @@ func jsonToFloat(b []byte, t string) float64 {
 }
 
 func jsonToBool(b []byte) bool {
-	b = findString(b)
+	b, _ = findString(b)
 
 	if isJSONTrue(b) {
 		return true
@@ -455,111 +469,11 @@ func jsonType(raw []byte) string {
 	return JSONInvalid
 }
 
-// func jsonToIface(raw []byte) interface{} {
-// 	if len(raw) == 0 {
-// 		return nil
-// 	}
-
-// 	a := 0
-
-// 	for i := 0; i < len(raw); i++ {
-// 		if isWS(raw[i]) {
-// 			a++
-// 			continue
-// 		}
-
-// 		break
-// 	}
-
-// 	if len(raw) == 0 {
-// 		return nil
-// 	}
-
-// 	switch raw[a] {
-// 	case '{':
-// 		// @todo
-// 	case '[':
-// 		// @todo
-// 	case '"':
-// 		a := jsonToString(raw)
-// 		return a
-// 		// return jsonToString(raw)
-// 	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-// 		b, t := findNumber(raw)
-// 		if t == JSONInt {
-// 			return jsonToInt(b, t)
-// 		}
-
-// 		if t == JSONFloat {
-// 			return jsonToFloat(b, t)
-// 		}
-
-// 		return jsonToString(raw)
-
-// 	case '0':
-// 		return 0
-// 	case 't', 'T':
-// 		if isJSONTrue(raw) {
-// 			return true
-// 		}
-// 	case 'f', 'F':
-// 		if isJSONFalse(raw) {
-// 			return false
-// 		}
-// 	case 'n', 'N':
-// 		if isJSONNull(raw) {
-// 			return false
-// 		}
-// 	}
-
-// 	return jsonToString(raw)
-// }
-
-func countSliceMembers2(raw []byte) int {
-	a, b := trimWS(raw, true)
-
-	_ = b
-
-	if len(raw[a:]) < 3 {
-		// 3 Bytes: Open Bracket, Close Bracket, and 1 member.
-		return 0
-	}
-
-	if raw[a] != '[' || raw[b] != ']' {
-		// Not a slice.
-		return 0
-	}
-
-	a++ // Consume open bracket.
-	b-- // Consume close bracket.
-
-	raw = raw[a : b+1]
-	count := 0
-
-MEMBERS:
-	for {
-		raw = raw[firstNonWSByte(raw):]
-		switch raw[0] {
-		case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0':
-			term := firstTerminator(raw)
-			count++
-			if term == len(raw)-1 {
-				break MEMBERS
-			}
-
-			raw = raw[term+1:]
-		default:
-			break MEMBERS
-		}
-	}
-
-	return count
-}
-
+// Find the position after the first comma or end of line.
 func firstTerminator(raw []byte) int {
 	for i := 0; i < len(raw); i++ {
 		if raw[i] == ',' {
-			return i
+			return i + 1
 		}
 	}
 
@@ -611,4 +525,42 @@ func trimWS(raw []byte, unquote bool) (int, int) {
 	}
 
 	return a, b
+}
+
+func unmarshalSlice(b []byte, p reflect.Value) (err error) {
+	// Check if p implements the json.Unmarshaler interface.
+	if p.CanAddr() && p.Addr().NumMethod() > 0 {
+		if u, ok := p.Addr().Interface().(PostUnmarshaler); ok {
+			defer func() { err = u.PostUnmarshalJSON(b, err) }()
+		}
+		if u, ok := p.Addr().Interface().(json.Unmarshaler); ok {
+			err = u.UnmarshalJSON(b)
+			return
+		}
+	}
+
+	t := jsonType(b)
+	childType := p.Type().Elem().Kind()
+
+	// ByteSlices are exceptionally hard to extract byte-by-byte given the difficulty
+	// of finding the correct position in the RawData, so we circumvent that problem by
+	// short-circuiting and treating it as if the whole array were an elemental type.
+	if childType == reflect.Uint8 {
+		if t == JSONString {
+			b, _ = findString(b)
+		}
+		p.Set(reflect.ValueOf(b))
+		return nil
+	}
+
+	// Count the member elements so that we can know how big to size our slice.
+	length := countMembers(b, t)
+
+	if length < 1 {
+		return nil
+	}
+
+	spew.Dump(length)
+
+	return nil
 }
