@@ -38,10 +38,7 @@ func panicOrigin(raw []byte) string {
 	// 3-4 are this file's PanicRecovery function.
 	// 5-6 are runtime.Panic
 
-	for i := 0; i < len(stack); i++ {
-		if i < 5 {
-			continue
-		}
+	for i := 6; i < len(stack); i++ {
 		if strings.Contains(string(stack[i]), "gojson/") {
 			return strings.TrimSpace(string(stack[i]))
 		}

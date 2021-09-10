@@ -89,9 +89,10 @@ func isWS(b byte) bool {
 	return false
 }
 
-// findNumber trims leading and trailing whitepsace, and returns the byte string
-// representation of a number along with the number type (Int, Float, or Invalid).
-// If raw is a quoted string, the quotes are removed.
+// Find a number:
+// 1) Trim all leading whitespace.
+// 2) If it's a quoted string, ignore the opening quote.
+// 3) Read until you find an invalid number byte, and return the type of number found.
 func findNumber(raw []byte) ([]byte, string) {
 	a := 0
 	// Here we're trimming whitespace and finding an opening quote if it exists.
@@ -116,7 +117,7 @@ func findNumber(raw []byte) ([]byte, string) {
 	}
 
 	if len(raw) == 1 && raw[0] == '0' {
-		return nil, JSONInvalid
+		return raw, JSONInt
 	}
 
 	// It's not a valid number unless it begins with minus, or 1-9
@@ -138,7 +139,7 @@ SEARCH:
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 			end++
 			continue
-		case '"':
+		case '"', ',', ']', '}':
 			break SEARCH
 		case '-', '+':
 			if !e || eSign {
@@ -171,7 +172,7 @@ SEARCH:
 }
 
 // findString trims leading and trailing whitepsace, and removes the leading
-// and trailing double quote if it exists.
+// and trailing double quote if it exists. Non-validating.
 func findString(raw []byte) []byte {
 	a := 0
 	b := len(raw)
