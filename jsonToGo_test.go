@@ -943,10 +943,28 @@ func TestNewUnmarshalMap(t *testing.T) {
 		require.Equal(t, a, c, "a, c")
 		require.Equal(t, b, c, "b, c")
 	})
+	t.Run("nested slice", func(t *testing.T) {
+		var a, b, c [][]bool
+		value := []byte(`[[true,false],[true,false,true],[false,true,false,true,false]]`)
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+
+		require.Equal(t, a, b, "a, b")
+		require.Equal(t, a, c, "a, c")
+		require.Equal(t, b, c, "b, c")
+	})
 }
 
 func BenchmarkNewUnmarshalMap(b *testing.B) {
-	ints := []byte(`    [123, 234, 345,        456, 567, 678, 789, 890, 901, 1012]   `)
+	ints := []byte(`[123,234,345,456,567,678,789,890,901,1012]`)
+	nested := []byte(`[[true,false],[true,false,true],[false,true,false,true,false]]`)
 
 	b.Run("ints", func(b *testing.B) {
 		b.Run("Default", func(b *testing.B) {
@@ -971,6 +989,36 @@ func BenchmarkNewUnmarshalMap(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				var m []int
 				err := UnmarshalJSON(ints, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+
+	b.Run("nested", func(b *testing.B) {
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m [][]bool
+				err := json.Unmarshal(nested, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m [][]bool
+				err := Unmarshal(nested, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m [][]bool
+				err := UnmarshalJSON(nested, &m)
 				if err != nil {
 					log.Fatal(err)
 				}

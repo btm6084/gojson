@@ -176,9 +176,11 @@ SEARCH:
 
 // findString trims leading and trailing whitepsace, and removes the leading
 // and trailing double quote if it exists.
-func findString(raw []byte) ([]byte, error) {
+func findBounded(raw []byte, open, close byte) ([]byte, error) {
 	a := 0
 	b := len(raw)
+
+	numOpen := 0
 
 	for i := 0; i < len(raw); i++ {
 		if isWS(raw[i]) {
@@ -186,32 +188,35 @@ func findString(raw []byte) ([]byte, error) {
 			continue
 		}
 
-		if raw[i] == '"' {
+		if raw[i] == open {
 			a++
+			numOpen++
 			break
 		}
 
 		return nil, fmt.Errorf("expected string at position %d in segment '%s'", i, truncate(raw, 50))
 	}
 
-	raw = raw[a:]
-
 	found := false
-	for i := 0; i < len(raw); i++ {
+	for i := a; i < len(raw[a:]); i++ {
 		if raw[i] == '\\' {
 			if i >= len(raw)-1 {
 				continue
 			}
 
-			if raw[i+1] == '"' {
+			if raw[i+1] == close {
 				i++ // consume the escaped quote
 			}
 		}
 
-		if raw[i] == '"' {
-			b = i
-			found = true
-			break
+		if raw[i] == close {
+			numOpen--
+
+			if numOpen == 0 {
+				b = i
+				found = true
+				break
+			}
 		}
 	}
 
@@ -219,7 +224,28 @@ func findString(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("expected string to terminate in segment '%s'", truncate(raw, 50))
 	}
 
-	return raw[:b], nil
+	// Keep the open and close inside it.
+	if a > 0 {
+		a = a - 1
+	}
+
+	if b < len(raw) {
+		b = b + 1
+	}
+
+	return raw[a:b], nil
+}
+
+func findString(raw []byte) ([]byte, error) {
+	return findBounded(raw, '"', '"')
+}
+
+func findArray(raw []byte) ([]byte, error) {
+	return findBounded(raw, '[', ']')
+}
+
+func findObject(raw []byte) ([]byte, error) {
+	return findBounded(raw, '{', '}')
 }
 
 func jsonToInt(b []byte, t string) int {
@@ -647,16 +673,26 @@ func getValue(raw []byte) ([]byte, string, error) {
 
 	switch raw[0] {
 	case '{':
-		panic("Object Not Implemented")
+		b, err := findObject(raw)
+		if err != nil {
+			return nil, JSONInvalid, err
+		}
+
+		return b, JSONObject, nil
 	case '[':
-		panic("Array Not Implemented")
+		b, err := findArray(raw)
+		if err != nil {
+			return nil, JSONInvalid, err
+		}
+
+		return b, JSONArray, nil
 	case '"':
 		b, err := findString(raw)
 		if err != nil {
-			return nil, JSONString, err
+			return nil, JSONInvalid, err
 		}
 
-		return b, "", nil
+		return b, JSONString, nil
 	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		b, t := findNumber(raw)
 		if t == JSONInvalid {
