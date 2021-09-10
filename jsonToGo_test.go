@@ -537,12 +537,11 @@ func BenchmarkNewUnmarshalString(b *testing.B) {
 }
 
 func TestNewUnmarshalInt(t *testing.T) {
-	value := []byte(`-142`)
-	uValue := []byte(`142`)
+	value := []byte(`-127`)
+	uValue := []byte(`255`)
 
 	t.Run("int", func(t *testing.T) {
-		var a, b int
-		var c float64
+		var a, b, c int
 
 		err := UnmarshalJSON(value, &a)
 		require.Nil(t, err)
@@ -575,8 +574,7 @@ func TestNewUnmarshalInt(t *testing.T) {
 		require.Equal(t, *b, int(*c))
 	})
 	t.Run("int32", func(t *testing.T) {
-		var a, b int32
-		var c float64
+		var a, b, c int32
 
 		err := UnmarshalJSON(value, &a)
 		require.Nil(t, err)
@@ -592,8 +590,7 @@ func TestNewUnmarshalInt(t *testing.T) {
 		require.Equal(t, b, int32(c))
 	})
 	t.Run("int64", func(t *testing.T) {
-		var a, b int64
-		var c float64
+		var a, b, c int64
 
 		err := UnmarshalJSON(value, &a)
 		require.Nil(t, err)
@@ -609,8 +606,7 @@ func TestNewUnmarshalInt(t *testing.T) {
 		require.Equal(t, b, int64(c))
 	})
 	t.Run("int16", func(t *testing.T) {
-		var a, b int16
-		var c float64
+		var a, b, c int16
 
 		err := UnmarshalJSON(value, &a)
 		require.Nil(t, err)
@@ -626,8 +622,7 @@ func TestNewUnmarshalInt(t *testing.T) {
 		require.Equal(t, b, int16(c))
 	})
 	t.Run("int8", func(t *testing.T) {
-		var a, b int8
-		var c float64
+		var a, b, c int8
 
 		err := UnmarshalJSON(value, &a)
 		require.Nil(t, err)
@@ -644,8 +639,7 @@ func TestNewUnmarshalInt(t *testing.T) {
 	})
 
 	t.Run("uint", func(t *testing.T) {
-		var a, b uint
-		var c float64
+		var a, b, c uint
 
 		err := UnmarshalJSON(uValue, &a)
 		require.Nil(t, err)
@@ -661,8 +655,7 @@ func TestNewUnmarshalInt(t *testing.T) {
 		require.Equal(t, b, uint(c))
 	})
 	t.Run("uint64", func(t *testing.T) {
-		var a, b uint64
-		var c float64
+		var a, b, c uint64
 
 		err := UnmarshalJSON(uValue, &a)
 		require.Nil(t, err)
@@ -678,8 +671,7 @@ func TestNewUnmarshalInt(t *testing.T) {
 		require.Equal(t, b, uint64(c))
 	})
 	t.Run("uint32", func(t *testing.T) {
-		var a, b uint32
-		var c float64
+		var a, b, c uint32
 
 		err := UnmarshalJSON(uValue, &a)
 		require.Nil(t, err)
@@ -695,8 +687,7 @@ func TestNewUnmarshalInt(t *testing.T) {
 		require.Equal(t, b, uint32(c))
 	})
 	t.Run("uint16", func(t *testing.T) {
-		var a, b uint16
-		var c float64
+		var a, b, c uint16
 
 		err := UnmarshalJSON(uValue, &a)
 		require.Nil(t, err)
@@ -712,8 +703,7 @@ func TestNewUnmarshalInt(t *testing.T) {
 		require.Equal(t, b, uint16(c))
 	})
 	t.Run("uint8", func(t *testing.T) {
-		var a, b uint8
-		var c float64
+		var a, b, c uint8
 
 		err := UnmarshalJSON(uValue, &a)
 		require.Nil(t, err)
@@ -884,38 +874,56 @@ func BenchmarkNewUnmarshalBool(b *testing.B) {
 	})
 }
 
-// func TestNewUnmarshalMap(t *testing.T) {
-// 	t.Run("ints", func(t *testing.T) {
-// 		var a, b []int
-// 		// value := []byte(`    [123, 234, 345,        456, 567, 678      , 789, 890, 901, 1012]   `)
-// 		// value := []byte(`["123", "234", "345", "456", "567", "678", "789", "890", "901", "1012"]`)
-// 		value := []byte(`["123", 234, true, false, null, "678", "789", "890", "901", "1012"]`)
+func TestNewUnmarshalMap(t *testing.T) {
+	t.Run("ints", func(t *testing.T) {
+		var a, b, c []int
+		value := []byte(`    [123, 234, 345,        456, 567, 678, 789, 890, 901, 1012]   `)
 
-// 		err := UnmarshalJSON(value, &a)
-// 		require.Nil(t, err)
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
 
-// 		// err = Unmarshal(value, &b)
-// 		// require.Nil(t, err)
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
 
-// 		// err = Unmarshal(value, &b)
-// 		// require.Nil(t, err)
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
 
-// 		// err = json.Unmarshal(value, &c)
-// 		// require.Nil(t, err)
+		require.Equal(t, a, b, "a, b")
+		require.Equal(t, a, c, "a, c")
+		require.Equal(t, b, c, "b, c")
+	})
+}
 
-// 		require.Equal(t, a, b, "a, b")
-// 		// require.Equal(t, a, c, "a, c")
-// 		// require.Equal(t, b, c, "b, c")
-// 	})
-// }
+func BenchmarkNewUnmarshalMap(b *testing.B) {
+	ints := []byte(`    [123, 234, 345,        456, 567, 678, 789, 890, 901, 1012]   `)
 
-// func BenchmarkNewUnmarshalMap(b *testing.B) {
-// 	ints := []byte(`["123", "234", "345", "456", "567", "678", "789", "890", "901", "1012"]`)
-
-// 	b.Run("Old", func(b *testing.B) {
-// 		for i := 0; i < b.N; i++ {
-// 			var m []int
-// 			Unmarshal(ints, &m)
-// 		}
-// 	})
-// }
+	b.Run("ints", func(b *testing.B) {
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m []int
+				err := json.Unmarshal(ints, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m []int
+				err := Unmarshal(ints, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m []int
+				err := UnmarshalJSON(ints, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+}

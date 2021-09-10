@@ -219,7 +219,6 @@ func findString(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("expected string to terminate in segment '%s'", truncate(raw, 50))
 	}
 
-	fmt.Println(string(raw[:b]))
 	return raw[:b], nil
 }
 
@@ -583,7 +582,7 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 	}
 
 	for i := 0; i < length; i++ {
-		b, ct, err := getValue(raw)
+		b, _, err := getValue(raw)
 		if err != nil {
 			panic(err)
 		}
@@ -594,17 +593,24 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 		sliceMember := slice.Index(i)
 		child := resolvePtr(sliceMember)
 
-		fmt.Println(string(b), ct)
-
 		switch child.Kind() {
 		case reflect.Map:
 		case reflect.Slice:
+			unmarshalSlice(b, child)
 		case reflect.Struct:
 		case reflect.Interface:
+			v := jsonToIface(b)
+			if v != nil {
+				child.Set(reflect.ValueOf(v))
+			} else {
+				child.Set(reflect.New(p.Type().Elem()).Elem())
+			}
 		default:
+			setValue(b, child)
 		}
 	}
 
+	p.Set(slice)
 	return nil
 }
 
@@ -676,23 +682,4 @@ func getValue(raw []byte) ([]byte, string, error) {
 	}
 
 	return nil, JSONInvalid, ErrMalformedJSON
-
-	// switch {
-	// case len(raw) < 1:
-	// 	return "", ErrMalformedJSON
-	// case raw[0] == '{': // Objects
-	// 	//return findObject(raw)
-	// case raw[0] == '[': // Arrays
-	// 	//return findArray(raw)
-	// case raw[start] == '"':
-	// 	return extractString(raw, start)
-	// case isDigit(raw[start]) || raw[start] == '-':
-	// 	return extractNumber(raw, start)
-	// case len(raw[start:]) >= 4 && (IsJSONTrue(raw[start:start+4]) || IsJSONNull(raw[start:start+4])):
-	// 	return extractConstant(raw, start)
-	// case len(raw[start:]) >= 5 && IsJSONFalse(raw[start:start+5]):
-	// 	return extractConstant(raw, start)
-	// default:
-	// 	return "", fmt.Errorf("invalid character '%s' at position '%d' in segment '%s'", string(raw[start]), start, raw)
-	// }
 }
