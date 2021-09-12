@@ -331,7 +331,6 @@ func (u *unmarshaler) unmarshalMap(b []byte, t string, p reflect.Value) (err err
 		}
 
 		key := reflect.ValueOf(k)
-
 		mapElement := reflect.New(p.Type().Elem()).Elem()
 		child := resolvePtr(mapElement)
 

@@ -874,7 +874,7 @@ func BenchmarkNewUnmarshalBool(b *testing.B) {
 	})
 }
 
-func TestNewUnmarshalMap(t *testing.T) {
+func TestNewUnmarshalSlice(t *testing.T) {
 	t.Run("ints", func(t *testing.T) {
 		var a, b, c []int
 		value := []byte(`[123,234,345,456,567,678,789,890,901,1012]`)
@@ -962,7 +962,7 @@ func TestNewUnmarshalMap(t *testing.T) {
 	})
 }
 
-func BenchmarkNewUnmarshalMap(b *testing.B) {
+func BenchmarkNewUnmarshalSlice(b *testing.B) {
 	ints := []byte(`[123,234,345,456,567,678,789,890,901,1012]`)
 	nested := []byte(`[[true,false],[true,false,true],[false,true,false,true,false]]`)
 
@@ -1019,6 +1019,59 @@ func BenchmarkNewUnmarshalMap(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				var m [][]bool
 				err := UnmarshalJSON(nested, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+}
+
+func TestNewUnmarshalMap(t *testing.T) {
+
+	t.Run("ints", func(t *testing.T) {
+		var a, b map[string]int
+		value := []byte(`{"a":123, "b":234, "c":345, "d":456, "e":567}`)
+		expected := map[string]int{"a": 123, "b": 234, "c": 345, "d": 456, "e": 567}
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+		require.Equal(t, expected, a)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+		require.Equal(t, expected, b)
+
+		require.Equal(t, a, b)
+
+	})
+}
+
+func BenchmarkNewUnmarshalMap(b *testing.B) {
+	ints := []byte(`{"a":123, "b":234, "c":345, "d":456, "e":567}`)
+	b.Run("ints", func(b *testing.B) {
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m map[string]int
+				err := json.Unmarshal(ints, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m map[string]int
+				err := Unmarshal(ints, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m map[string]int
+				err := UnmarshalJSON(ints, &m)
 				if err != nil {
 					log.Fatal(err)
 				}

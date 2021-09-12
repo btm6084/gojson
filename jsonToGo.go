@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strconv"
 	"unsafe"
+
+	"github.com/spf13/cast"
 )
 
 func isJSONTrue(b []byte) bool {
@@ -608,9 +610,19 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 	}
 
 	for i := 0; i < length; i++ {
-		b, _, err := getValue(raw)
-		if err != nil {
-			panic(err)
+		var b []byte
+		var err error
+
+		if t == JSONObject {
+			b, _, err = getKeyValue(raw)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			b, err = findValue(raw)
+			if err != nil {
+				panic(err)
+			}
 		}
 
 		raw = raw[len(b):]
@@ -621,8 +633,15 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 
 		switch child.Kind() {
 		case reflect.Map:
+			err := unmarshalMap(b, child)
+			if err != nil {
+				panic(err)
+			}
 		case reflect.Slice:
-			unmarshalSlice(b, child)
+			err := unmarshalSlice(b, child)
+			if err != nil {
+				panic(err)
+			}
 		case reflect.Struct:
 		case reflect.Interface:
 			v := jsonToIface(b)
@@ -640,6 +659,122 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 	return nil
 }
 
+func unmarshalMap(raw []byte, p reflect.Value) (err error) {
+	// Check if p implements the json.Unmarshaler interface.
+	if p.CanAddr() && p.Addr().NumMethod() > 0 {
+		if u, ok := p.Addr().Interface().(PostUnmarshaler); ok {
+			defer func() { err = u.PostUnmarshalJSON(raw, err) }()
+		}
+		if u, ok := p.Addr().Interface().(json.Unmarshaler); ok {
+			err = u.UnmarshalJSON(raw)
+			return
+		}
+	}
+
+	a, b := trimWS(raw, false)
+	raw = raw[a:b]
+
+	t := jsonType(raw)
+	if t == JSONNull {
+		return nil
+	}
+
+	childType := p.Type().Elem().Kind()
+
+	// ByteSlices are exceptionally hard to extract byte-by-byte given the difficulty
+	// of finding the correct position in the RawData, so we circumvent that problem by
+	// short-circuiting and treating it as if the whole array were an elemental type.
+	if childType == reflect.Uint8 {
+		if t == JSONString {
+			raw, err = findString(raw)
+			if err != nil {
+				panic(err)
+			}
+
+			a, b := trimWS(raw, true)
+			raw = raw[a:b]
+		}
+		newMap := reflect.MakeMap(p.Type())
+
+		for k, v := range raw {
+			newMap.SetMapIndex(reflect.ValueOf(strconv.Itoa(k)), reflect.ValueOf(v))
+		}
+
+		p.Set(newMap)
+		return nil
+	}
+
+	/// @TODO: Degradation is here. We need to not traverse it twice.
+	length := countMembers(raw, t)
+	if length < 1 {
+		return nil
+	}
+
+	switch {
+	case t == JSONObject && IsEmptyObject(raw):
+		return nil
+	case t == JSONArray && IsEmptyArray(raw):
+		return nil
+	}
+
+	newMap := reflect.MakeMap(p.Type())
+
+	if t == JSONObject || t == JSONArray {
+		raw = raw[1:] // Consume the opening bracket/brace.
+	}
+
+	for i := 0; i < length; i++ {
+		var k string
+		var b, kb []byte
+		var err error
+
+		if t == JSONObject {
+			b, kb, err = getKeyValue(raw)
+			if err != nil {
+				panic(err)
+			}
+
+			k = string(kb)
+		} else {
+			b, err = findValue(raw)
+			if err != nil {
+				panic(err)
+			}
+			k = cast.ToString(i)
+		}
+
+		raw = raw[len(b):]
+		raw = raw[afterNextComma(raw):]
+
+		key := reflect.ValueOf(k)
+		mapElement := reflect.New(p.Type().Elem()).Elem()
+		child := resolvePtr(mapElement)
+
+		switch child.Kind() {
+		case reflect.Map:
+			unmarshalMap(b, child)
+			newMap.SetMapIndex(key, mapElement)
+		case reflect.Slice:
+			unmarshalSlice(b, child)
+			newMap.SetMapIndex(key, mapElement)
+		case reflect.Struct:
+		case reflect.Interface:
+			v := jsonToIface(b)
+			if v != nil {
+				newMap.SetMapIndex(key, reflect.ValueOf(v))
+			} else {
+				newMap.SetMapIndex(key, mapElement)
+			}
+		default:
+			setValue(b, child)
+			newMap.SetMapIndex(key, mapElement)
+		}
+	}
+
+	p.Set(newMap)
+	return nil
+}
+
 func afterNextComma(raw []byte) int {
 	for i := 0; i < len(raw); i++ {
 		if raw[i] == ',' {
@@ -650,8 +785,36 @@ func afterNextComma(raw []byte) int {
 	return len(raw) - 1
 }
 
+func afterNextColon(raw []byte) int {
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == ':' {
+			return i + 1
+		}
+	}
+
+	return len(raw) - 1
+}
+
+func getKeyValue(raw []byte) ([]byte, []byte, error) {
+	kb, err := findString(raw)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	raw = raw[afterNextColon(raw):]
+
+	b, err := findValue(raw)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	s, e := trimWS(kb, true)
+
+	return b, kb[s:e], nil
+}
+
 // Find the next value up to a terminator
-func getValue(raw []byte) ([]byte, string, error) {
+func findValue(raw []byte) ([]byte, error) {
 	a := 0
 	for i := 0; i < len(raw); i++ {
 		if isWS(raw[i]) {
@@ -664,58 +827,58 @@ func getValue(raw []byte) ([]byte, string, error) {
 	raw = raw[a:]
 
 	if len(raw) == 0 {
-		return nil, JSONInvalid, ErrMalformedJSON
+		return nil, ErrMalformedJSON
 	}
 
 	if len(raw) == 1 && raw[0] == 0 {
-		return raw, JSONInt, nil
+		return raw, nil
 	}
 
 	switch raw[0] {
 	case '{':
 		b, err := findObject(raw)
 		if err != nil {
-			return nil, JSONInvalid, err
+			return nil, err
 		}
 
-		return b, JSONObject, nil
+		return b, nil
 	case '[':
 		b, err := findArray(raw)
 		if err != nil {
-			return nil, JSONInvalid, err
+			return nil, err
 		}
 
-		return b, JSONArray, nil
+		return b, nil
 	case '"':
 		b, err := findString(raw)
 		if err != nil {
-			return nil, JSONInvalid, err
+			return nil, err
 		}
 
-		return b, JSONString, nil
+		return b, nil
 	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		b, t := findNumber(raw)
 		if t == JSONInvalid {
-			return nil, t, fmt.Errorf("expected number in segment '%s'", truncate(raw, 50))
+			return nil, fmt.Errorf("expected number in segment '%s'", truncate(raw, 50))
 		}
 
-		return b, t, nil
+		return b, nil
 	case 't', 'T':
 		if len(raw) < 4 || !isJSONTrue(raw[:4]) {
-			return nil, JSONInvalid, fmt.Errorf("expected json `true` in segment '%s'", truncate(raw, 50))
+			return nil, fmt.Errorf("expected json `true` in segment '%s'", truncate(raw, 50))
 		}
-		return raw[:4], JSONBool, nil
+		return raw[:4], nil
 	case 'f', 'F':
 		if len(raw) < 5 || !isJSONFalse(raw[:5]) {
-			return nil, JSONInvalid, fmt.Errorf("expected json `false` in segment '%s'", truncate(raw, 50))
+			return nil, fmt.Errorf("expected json `false` in segment '%s'", truncate(raw, 50))
 		}
-		return raw[:5], JSONBool, nil
+		return raw[:5], nil
 	case 'n', 'N':
 		if len(raw) < 4 || !isJSONNull(raw[:4]) {
-			return nil, JSONInvalid, fmt.Errorf("expected json `null` in segment '%s'", truncate(raw, 50))
+			return nil, fmt.Errorf("expected json `null` in segment '%s'", truncate(raw, 50))
 		}
-		return raw[:4], JSONNull, nil
+		return raw[:4], nil
 	}
 
-	return nil, JSONInvalid, ErrMalformedJSON
+	return nil, ErrMalformedJSON
 }
