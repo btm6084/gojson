@@ -704,12 +704,6 @@ func unmarshalMap(raw []byte, p reflect.Value) (err error) {
 		return nil
 	}
 
-	/// @TODO: Degradation is here. We need to not traverse it twice.
-	length := countMembers(raw, t)
-	if length < 1 {
-		return nil
-	}
-
 	switch {
 	case t == JSONObject && IsEmptyObject(raw):
 		return nil
@@ -723,7 +717,9 @@ func unmarshalMap(raw []byte, p reflect.Value) (err error) {
 		raw = raw[1:] // Consume the opening bracket/brace.
 	}
 
-	for i := 0; i < length; i++ {
+	i := 0
+SEARCH:
+	for {
 		var k string
 		var b, kb []byte
 		var err error
@@ -769,15 +765,53 @@ func unmarshalMap(raw []byte, p reflect.Value) (err error) {
 			setValue(b, child)
 			newMap.SetMapIndex(key, mapElement)
 		}
+
+		i++
+
+		a := afterNextWS(raw)
+		switch t {
+		case JSONObject:
+			if raw[a] == ',' {
+				continue SEARCH
+			}
+			if raw[a] == '}' {
+				break SEARCH
+			}
+		case JSONArray:
+			if raw[a] == ',' {
+				continue SEARCH
+			}
+			if raw[a] == ']' {
+				break SEARCH
+			}
+		default:
+			break SEARCH
+		}
 	}
 
 	p.Set(newMap)
 	return nil
 }
 
+func afterNextWS(raw []byte) int {
+	for i := 0; i < len(raw); i++ {
+		if isWS(raw[i]) {
+			if i == len(raw)-1 {
+				return i
+			}
+			return i + 1
+		}
+	}
+
+	return len(raw) - 1
+}
+
 func afterNextComma(raw []byte) int {
 	for i := 0; i < len(raw); i++ {
 		if raw[i] == ',' {
+			if i == len(raw)-1 {
+				return i
+			}
 			return i + 1
 		}
 	}
@@ -788,6 +822,9 @@ func afterNextComma(raw []byte) int {
 func afterNextColon(raw []byte) int {
 	for i := 0; i < len(raw); i++ {
 		if raw[i] == ':' {
+			if i == len(raw)-1 {
+				return i
+			}
 			return i + 1
 		}
 	}
