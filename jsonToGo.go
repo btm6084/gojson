@@ -865,6 +865,8 @@ SEARCH:
 		raw = raw[len(b):]
 		raw = raw[afterNextComma(raw):]
 
+		fmt.Println(count, string(kb), ":", string(b))
+
 		k := *(*string)(unsafe.Pointer(&kb))
 		if _, isset := required[k]; isset {
 			required[k] = true
@@ -873,6 +875,8 @@ SEARCH:
 		if _, ok := keys[k]; !ok {
 			continue
 		}
+
+		fmt.Println("AFTER")
 
 		if info.NonEmpty(k) && isZeroValue(b, jsonType(b)) {
 			return fmt.Errorf("nonempty key '%s' for struct '%s' has %s zero value", keys[k].Name, p.Type().Name(), jsonType(b))

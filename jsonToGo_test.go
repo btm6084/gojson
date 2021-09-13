@@ -2,6 +2,7 @@ package gojson
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"testing"
 
@@ -1166,4 +1167,34 @@ func BenchmarkNewUnmarshalStruct(b *testing.B) {
 			}
 		})
 	})
+}
+
+func TestSpecial(t *testing.T) {
+	input := []byte(`{
+		"empty_string": "",
+		"string": "some string",
+		"int": 17,
+		"bool": true,
+		"null": null,
+		"float": 22.83,
+		"string_slice": [ "a", "b", "c", "d", "e", "t" ],
+		"bool_slice": [ true, false, true, false ],
+		"int_slice": [ -1, 0, 1, 2, 3, 4 ],
+		"float_slice": [ -1.1, 0.0, 1.1, 2.2, 3.3 ],
+		"object": { "a": "b", "c": "d" },
+		"objects": [
+			{ "e": "f", "g": "h" },
+			{ "i": "j", "k": "l" },
+			{ "m": "n", "o": "t" }
+		],
+		"complex": [ "a", 2, null, false, 2.2, { "c": "d", "empty_string": "" }, [ "s" ] ]
+	}`)
+
+	var m struct {
+		FloatSlice []float64 `json:"float_slice"`
+	}
+
+	require.Nil(t, Unmarshal(input, &m))
+
+	fmt.Println(m.FloatSlice)
 }
