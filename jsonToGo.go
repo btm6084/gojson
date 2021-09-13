@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/spf13/cast"
@@ -790,6 +791,134 @@ SEARCH:
 	}
 
 	p.Set(newMap)
+	return nil
+}
+
+func unmarshalStruct(raw []byte, p reflect.Value) (err error) {
+	// Check if p implements the json.Unmarshaler interface.
+	if p.CanAddr() && p.Addr().NumMethod() > 0 {
+		if u, ok := p.Addr().Interface().(PostUnmarshaler); ok {
+			defer func() { err = u.PostUnmarshalJSON(raw, err) }()
+		}
+		if u, ok := p.Addr().Interface().(json.Unmarshaler); ok {
+			return u.UnmarshalJSON(raw)
+		}
+	}
+
+	t := jsonType(raw)
+	if t != JSONObject {
+		err = fmt.Errorf("attempt to unmarshal JSON value with type '%s' into struct", t)
+		return
+	}
+
+	info := getStructInfo(p.Type())
+	keys := info.Keys
+
+	if IsEmptyObject(raw) || IsEmptyArray(raw) {
+		if len(info.RequiredKeys) > 0 {
+			err = fmt.Errorf("missing required keys '%s' for struct '%s'", strings.Join(info.RequiredKeys, ","), p.Type().Name())
+			return
+		}
+
+		return nil
+	}
+
+	if t == JSONObject || t == JSONArray {
+		raw = raw[1:] // Consume the opening bracket/brace.
+	}
+
+	required := make(map[string]bool, len(info.RequiredKeys))
+	for _, k := range info.RequiredKeys {
+		required[k] = false
+	}
+
+	// Tracking count keeps us from doing extra work if there's no where to put the remaining JSON anyway.
+	// ie. If the JSON has 17 keys, but the struct has 3, we stop parsing once we've filled those three.
+	count := len(keys)
+SEARCH:
+	for count > 0 {
+		b, kb, gkvErr := getKeyValue(raw)
+		if gkvErr != nil {
+			err = gkvErr
+			return
+		}
+
+		raw = raw[len(b):]
+		raw = raw[afterNextComma(raw):]
+
+		k := *(*string)(unsafe.Pointer(&kb))
+		if _, isset := required[k]; isset {
+			required[k] = true
+		}
+
+		if _, ok := keys[k]; !ok {
+			continue
+		}
+
+		if info.NonEmpty(k) && isZeroValue(b, jsonType(b)) {
+			return fmt.Errorf("nonempty key '%s' for struct '%s' has %s zero value", keys[k].Name, p.Type().Name(), jsonType(b))
+		}
+
+		// If we're dealing with an embeded struct, make sure we're expanding properly.
+		var f reflect.Value
+		if len(keys[k].Path) > 0 {
+			f = p
+			// Follow the path through the parent nodes until we hit the bottom.
+			for _, i := range keys[k].Path {
+				f = resolvePtr(f.Field(i))
+			}
+			f = resolvePtr(f.Field(keys[k].Index))
+		} else {
+			f = resolvePtr(p.Field(keys[k].Index))
+		}
+
+		switch f.Kind() {
+		case reflect.Map:
+			err = unmarshalMap(b, f)
+			if err != nil {
+				return
+			}
+		case reflect.Slice:
+			err = unmarshalSlice(b, f)
+			if err != nil {
+				return
+			}
+		case reflect.Struct:
+			err = unmarshalStruct(b, f)
+			if err != nil {
+				return
+			}
+		case reflect.Interface:
+			v := jsonToIface(b)
+			if v != nil {
+				f.Set(reflect.ValueOf(v))
+			}
+		default:
+			err = setValue(b, f)
+			if err != nil {
+				return
+			}
+		}
+
+		// Stop if we hit the end of the JSON
+		a := afterNextWS(raw)
+		if raw[a] == ',' {
+			continue SEARCH
+		}
+		if raw[a] == '}' {
+			break SEARCH
+		}
+
+		count--
+	}
+
+	for _, k := range info.RequiredKeys {
+		if !required[k] {
+			err = fmt.Errorf("required key '%s' for struct '%s' was not found", k, p.Type().Name())
+			return
+		}
+	}
+
 	return nil
 }
 

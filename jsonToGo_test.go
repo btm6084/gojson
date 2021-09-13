@@ -1079,3 +1079,91 @@ func BenchmarkNewUnmarshalMap(b *testing.B) {
 		})
 	})
 }
+
+func TestNewUnmarshalStruct(t *testing.T) {
+
+	type MyStruct struct {
+		A int `json:"a"`
+		B int `json:"b"`
+		C int `json:"c"`
+		D int `json:"d"`
+		E int `json:"e"`
+	}
+
+	t.Run("ints", func(t *testing.T) {
+		var a, b, c MyStruct
+		value := []byte(`{"a":123, "b":234, "c":345, "d":456, "e":567}`)
+		expected := MyStruct{A: 123, B: 234, C: 345, D: 456, E: 567}
+
+		err := UnmarshalJSON(value, &a)
+		require.Nil(t, err)
+		require.Equal(t, expected, a)
+
+		err = Unmarshal(value, &b)
+		require.Nil(t, err)
+		require.Equal(t, expected, b)
+
+		err = json.Unmarshal(value, &c)
+		require.Nil(t, err)
+		require.Equal(t, expected, c)
+
+		require.Equal(t, a, b)
+		require.Equal(t, a, c)
+		require.Equal(t, b, c)
+
+	})
+}
+
+func BenchmarkNewUnmarshalStruct(b *testing.B) {
+	ints := []byte(`{"a":123, "b":234, "c":345, "d":456, "e":567}`)
+
+	b.Run("ints", func(b *testing.B) {
+		b.Run("Default", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m struct {
+					A int `json:"a"`
+					B int `json:"b"`
+					C int `json:"c"`
+					D int `json:"d"`
+					E int `json:"e"`
+				}
+				err := json.Unmarshal(ints, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+		b.Run("Old", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m struct {
+					A int `json:"a"`
+					B int `json:"b"`
+					C int `json:"c"`
+					D int `json:"d"`
+					E int `json:"e"`
+				}
+
+				err := Unmarshal(ints, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+		b.Run("New", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var m struct {
+					A int `json:"a"`
+					B int `json:"b"`
+					C int `json:"c"`
+					D int `json:"d"`
+					E int `json:"e"`
+				}
+
+				err := UnmarshalJSON(ints, &m)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		})
+	})
+}
