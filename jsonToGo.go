@@ -182,9 +182,9 @@ SEARCH:
 func findBounded(raw []byte, open, close byte) ([]byte, error) {
 	a := 0
 	b := len(raw)
+	lenRaw := len(raw)
 
 	numOpen := 0
-
 	for i := 0; i < len(raw); i++ {
 		if isWS(raw[i]) {
 			a++
@@ -201,7 +201,7 @@ func findBounded(raw []byte, open, close byte) ([]byte, error) {
 	}
 
 	found := false
-	for i := a; i < len(raw[a:]); i++ {
+	for i := a; i < lenRaw; i++ {
 		if raw[i] == '\\' {
 			if i >= len(raw)-1 {
 				continue
@@ -209,6 +209,7 @@ func findBounded(raw []byte, open, close byte) ([]byte, error) {
 
 			if raw[i+1] == close {
 				i++ // consume the escaped quote
+				continue
 			}
 		}
 
