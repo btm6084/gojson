@@ -344,10 +344,22 @@ func jsonToIface(b []byte) interface{} {
 		} else {
 			return false
 		}
-	case JSONArray:
-		// @TODO
 	case JSONObject:
-		// @TODO
+		var iface map[string]interface{}
+		err := UnmarshalJSON(b, &iface)
+		if err != nil {
+			panic(err)
+		}
+
+		return iface
+	case JSONArray:
+		var iface []interface{}
+		err := UnmarshalJSON(b, &iface)
+		if err != nil {
+			panic(err)
+		}
+
+		return iface
 	}
 
 	return nil
@@ -644,6 +656,10 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 				panic(err)
 			}
 		case reflect.Struct:
+			err := unmarshalStruct(b, child)
+			if err != nil {
+				panic(err)
+			}
 		case reflect.Interface:
 			v := jsonToIface(b)
 			if v != nil {
@@ -755,6 +771,8 @@ SEARCH:
 			unmarshalSlice(b, child)
 			newMap.SetMapIndex(key, mapElement)
 		case reflect.Struct:
+			unmarshalStruct(b, child)
+			newMap.SetMapIndex(key, mapElement)
 		case reflect.Interface:
 			v := jsonToIface(b)
 			if v != nil {

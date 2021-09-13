@@ -27,7 +27,7 @@ const (
 	JSONObject = "object"
 
 	// JSONInvalid denotes a value that is not valid JSON
-	JSONInvalid = ""
+	JSONInvalid = "invalid"
 )
 
 // IsJSON performs validation on a JSON string.

@@ -18,9 +18,13 @@ func UnmarshalJSON(raw []byte, v interface{}) (err error) {
 		return fmt.Errorf("supplied container (v) must be a pointer")
 	}
 
-	err = setValue(raw, p)
+	if jsonType(raw) == JSONInvalid {
+		err = ErrMalformedJSON
+		return
+	}
 
-	return nil
+	err = setValue(raw, p)
+	return err
 }
 
 func setValue(b []byte, p reflect.Value) (err error) {
