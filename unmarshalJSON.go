@@ -44,11 +44,20 @@ func setValue(b []byte, p reflect.Value) (err error) {
 
 	switch k {
 	case reflect.Struct:
-		unmarshalStruct(b, p)
+		err := unmarshalStruct(b, p)
+		if err != nil {
+			return err
+		}
 	case reflect.Slice:
-		unmarshalSlice(b, p)
+		err := unmarshalSlice(b, p)
+		if err != nil {
+			return err
+		}
 	case reflect.Map:
-		unmarshalMap(b, p)
+		err := unmarshalMap(b, p)
+		if err != nil {
+			return err
+		}
 	case reflect.String:
 		p.SetString(jsonToString(b))
 	case reflect.Int:

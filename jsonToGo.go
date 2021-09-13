@@ -99,7 +99,7 @@ func isWS(b byte) bool {
 // 1) Trim all leading whitespace.
 // 2) If it's a quoted string, ignore the opening quote.
 // 3) Read until you find an invalid number byte or a terminal character, and return the found type.
-func findNumber(raw []byte) ([]byte, string) {
+func findNumber(raw []byte) ([]byte, int, string) {
 	a := 0
 	// Here we're trimming whitespace and finding an opening quote if it exists.
 	for i := 0; i < len(raw); i++ {
@@ -119,20 +119,26 @@ func findNumber(raw []byte) ([]byte, string) {
 	raw = raw[a:]
 
 	if len(raw) == 0 {
-		return nil, JSONInvalid
+		return nil, 0, JSONInvalid
 	}
 
 	if len(raw) == 1 && raw[0] == '0' {
-		return raw, JSONInt
+		return raw, 1, JSONInt
 	}
 
-	// It's not a valid number unless it begins with minus, or 1-9
+	// It's not a valid number unless it begins with minus, or 1-9; or 0.
 	end := 0
 	switch raw[0] {
 	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		end++
+	case '0':
+		if len(raw) > 2 && raw[1] == '.' { // If a number starts with 0, it must be followed by a .
+			end++
+			break
+		}
+		return nil, 0, JSONInvalid
 	default:
-		return nil, JSONInvalid
+		return nil, 0, JSONInvalid
 	}
 
 	e := false
@@ -149,37 +155,39 @@ SEARCH:
 			break SEARCH
 		case '-', '+':
 			if !e || eSign {
-				return nil, JSONInvalid
+				return nil, 0, JSONInvalid
 			}
 			eSign = true
 			end++
 		case 'e', 'E':
 			if e {
-				return nil, JSONInvalid
+				return nil, 0, JSONInvalid
 			}
 			e = true
 			end++
 		case '.':
 			if period {
-				return nil, JSONInvalid
+				return nil, 0, JSONInvalid
 			}
 			period = true
 			end++
+		case ' ':
+			break SEARCH
 		default:
-			return nil, JSONInvalid
+			return nil, 0, JSONInvalid
 		}
 	}
 
 	if period || e {
-		return raw[:end], JSONFloat
+		return raw[:end], (a + end), JSONFloat
 	}
 
-	return raw[:end], JSONInt
+	return raw[:end], a + end, JSONInt
 }
 
 // findString trims leading and trailing whitepsace, and removes the leading
 // and trailing double quote if it exists.
-func findBounded(raw []byte, open, close byte) ([]byte, error) {
+func findBounded(raw []byte, open, close byte) ([]byte, int, error) {
 	a := 0
 	b := len(raw)
 	lenRaw := len(raw)
@@ -197,7 +205,7 @@ func findBounded(raw []byte, open, close byte) ([]byte, error) {
 			break
 		}
 
-		return nil, fmt.Errorf("expected string at position %d in segment '%s'", i, truncate(raw, 50))
+		return nil, 0, fmt.Errorf("expected string at position %d in segment '%s'", i, truncate(raw, 50))
 	}
 
 	found := false
@@ -225,7 +233,7 @@ func findBounded(raw []byte, open, close byte) ([]byte, error) {
 	}
 
 	if !found {
-		return nil, fmt.Errorf("expected string to terminate in segment '%s'", truncate(raw, 50))
+		return nil, 0, fmt.Errorf("expected string to terminate in segment '%s'", truncate(raw, 50))
 	}
 
 	// Keep the open and close inside it.
@@ -237,18 +245,18 @@ func findBounded(raw []byte, open, close byte) ([]byte, error) {
 		b = b + 1
 	}
 
-	return raw[a:b], nil
+	return raw[a:b], b, nil
 }
 
-func findString(raw []byte) ([]byte, error) {
+func findString(raw []byte) ([]byte, int, error) {
 	return findBounded(raw, '"', '"')
 }
 
-func findArray(raw []byte) ([]byte, error) {
+func findArray(raw []byte) ([]byte, int, error) {
 	return findBounded(raw, '[', ']')
 }
 
-func findObject(raw []byte) ([]byte, error) {
+func findObject(raw []byte) ([]byte, int, error) {
 	return findBounded(raw, '{', '}')
 }
 
@@ -258,7 +266,7 @@ func jsonToInt(b []byte, t string) int {
 	}
 
 	if t == "" {
-		b, t = findNumber(b)
+		b, _, t = findNumber(b)
 	}
 
 	if t == JSONInvalid {
@@ -285,7 +293,7 @@ func jsonToFloat(b []byte, t string) float64 {
 	}
 
 	if t == "" {
-		b, t = findNumber(b)
+		b, _, t = findNumber(b)
 	}
 
 	if t == JSONInvalid {
@@ -325,37 +333,55 @@ func jsonToBool(raw []byte) bool {
 	return out
 }
 
-func jsonToIface(b []byte) interface{} {
-	if len(b) == 1 && b[0] == '0' {
+func jsonToIface(raw []byte) interface{} {
+	if len(raw) == 1 && raw[0] == '0' {
 		return int(0)
 	}
 
-	switch jsonType(b) {
+	switch jsonType(raw) {
 	case JSONString:
-		return jsonToString(b)
+		return jsonToString(raw)
 	case JSONInt:
-		return jsonToInt(b, JSONInt)
+		return jsonToInt(raw, JSONInt)
 	case JSONFloat:
-		return jsonToFloat(b, JSONFloat)
+		return jsonToFloat(raw, JSONFloat)
 	case JSONNull:
 		return nil
 	case JSONBool:
-		if isJSONTrue(b) {
+		if isJSONTrue(raw) {
 			return true
 		} else {
 			return false
 		}
-	case JSONObject:
-		var iface map[string]interface{}
-		err := UnmarshalJSON(b, &iface)
-		if err != nil {
-			panic(err)
-		}
+	case JSONObject: // @TODO: Do faster
+		iface := make(map[string]interface{})
 
-		return iface
-	case JSONArray:
+		for {
+			b, kb, n, err := getKeyValue(raw)
+			if err != nil {
+				panic(err)
+			}
+
+			raw = raw[n:]
+			raw = raw[afterNextComma(raw):]
+
+			iface[string(kb)] = jsonToIface(b)
+
+			// Stop if we hit the end of the JSON
+			a := afterNextWS(raw)
+			if len(raw[a:]) == 0 {
+				return fmt.Errorf("expected }, found EOL")
+			}
+			if raw[a] == ',' {
+				continue
+			}
+			if raw[a] == '}' {
+				return iface
+			}
+		}
+	case JSONArray: // @TODO: Do faster
 		var iface []interface{}
-		err := UnmarshalJSON(b, &iface)
+		err := UnmarshalJSON(raw, &iface)
 		if err != nil {
 			panic(err)
 		}
@@ -515,8 +541,8 @@ func jsonType(raw []byte) string {
 		return JSONArray
 	case '"':
 		return JSONString
-	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		_, t := findNumber(raw)
+	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0':
+		_, _, t := findNumber(raw)
 		return t
 	case 't', 'T':
 		if isJSONTrue(raw[a:]) {
@@ -600,9 +626,9 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 	// short-circuiting and treating it as if the whole array were an elemental type.
 	if childType == reflect.Uint8 {
 		if t == JSONString {
-			raw, err = findString(raw)
+			raw, _, err = findString(raw)
 			if err != nil {
-				panic(err)
+				return err
 			}
 
 			a, b := trimWS(raw, true)
@@ -618,28 +644,28 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 	}
 
 	slice := reflect.MakeSlice(p.Type(), length, length)
-
 	if t == JSONObject || t == JSONArray {
 		raw = raw[1:] // Consume the opening bracket/brace.
 	}
 
 	for i := 0; i < length; i++ {
 		var b []byte
+		var n int
 		var err error
 
 		if t == JSONObject {
-			b, _, err = getKeyValue(raw)
+			b, _, n, err = getKeyValue(raw)
 			if err != nil {
-				panic(err)
+				return err
 			}
 		} else {
-			b, err = findValue(raw)
+			b, n, err = findValue(raw)
 			if err != nil {
-				panic(err)
+				return err
 			}
 		}
 
-		raw = raw[len(b):]
+		raw = raw[n:]
 		raw = raw[afterNextComma(raw):]
 
 		sliceMember := slice.Index(i)
@@ -647,19 +673,19 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 
 		switch child.Kind() {
 		case reflect.Map:
-			err := unmarshalMap(b, child)
+			err = unmarshalMap(b, child)
 			if err != nil {
-				panic(err)
+				return err
 			}
 		case reflect.Slice:
-			err := unmarshalSlice(b, child)
+			err = unmarshalSlice(b, child)
 			if err != nil {
-				panic(err)
+				return err
 			}
 		case reflect.Struct:
-			err := unmarshalStruct(b, child)
+			err = unmarshalStruct(b, child)
 			if err != nil {
-				panic(err)
+				return err
 			}
 		case reflect.Interface:
 			v := jsonToIface(b)
@@ -704,9 +730,9 @@ func unmarshalMap(raw []byte, p reflect.Value) (err error) {
 	// short-circuiting and treating it as if the whole array were an elemental type.
 	if childType == reflect.Uint8 {
 		if t == JSONString {
-			raw, err = findString(raw)
+			raw, _, err = findString(raw)
 			if err != nil {
-				panic(err)
+				return err
 			}
 
 			a, b := trimWS(raw, true)
@@ -740,24 +766,25 @@ SEARCH:
 	for {
 		var k string
 		var b, kb []byte
+		var n int
 		var err error
 
 		if t == JSONObject {
-			b, kb, err = getKeyValue(raw)
+			b, kb, n, err = getKeyValue(raw)
 			if err != nil {
-				panic(err)
+				return err
 			}
 
 			k = string(kb)
 		} else {
-			b, err = findValue(raw)
+			b, n, err = findValue(raw)
 			if err != nil {
-				panic(err)
+				return err
 			}
 			k = cast.ToString(i)
 		}
 
-		raw = raw[len(b):]
+		raw = raw[n:]
 		raw = raw[afterNextComma(raw):]
 
 		key := reflect.ValueOf(k)
@@ -766,13 +793,22 @@ SEARCH:
 
 		switch child.Kind() {
 		case reflect.Map:
-			unmarshalMap(b, child)
+			err := unmarshalMap(b, child)
+			if err != nil {
+				return err
+			}
 			newMap.SetMapIndex(key, mapElement)
 		case reflect.Slice:
-			unmarshalSlice(b, child)
+			err := unmarshalSlice(b, child)
+			if err != nil {
+				return err
+			}
 			newMap.SetMapIndex(key, mapElement)
 		case reflect.Struct:
-			unmarshalStruct(b, child)
+			err := unmarshalStruct(b, child)
+			if err != nil {
+				return err
+			}
 			newMap.SetMapIndex(key, mapElement)
 		case reflect.Interface:
 			v := jsonToIface(b)
@@ -789,6 +825,12 @@ SEARCH:
 		i++
 
 		a := afterNextWS(raw)
+		if len(raw[a:]) == 0 {
+			return fmt.Errorf("expected terminator (']', '}', ','), found EOL")
+		}
+
+		fmt.Println(string(raw))
+
 		switch t {
 		case JSONObject:
 			if raw[a] == ',' {
@@ -856,16 +898,13 @@ func unmarshalStruct(raw []byte, p reflect.Value) (err error) {
 	count := len(keys)
 SEARCH:
 	for count > 0 {
-		b, kb, gkvErr := getKeyValue(raw)
+		b, kb, n, gkvErr := getKeyValue(raw)
 		if gkvErr != nil {
-			err = gkvErr
-			return
+			return gkvErr
 		}
 
-		raw = raw[len(b):]
+		raw = raw[n:]
 		raw = raw[afterNextComma(raw):]
-
-		fmt.Println(count, string(kb), ":", string(b))
 
 		k := *(*string)(unsafe.Pointer(&kb))
 		if _, isset := required[k]; isset {
@@ -875,8 +914,6 @@ SEARCH:
 		if _, ok := keys[k]; !ok {
 			continue
 		}
-
-		fmt.Println("AFTER")
 
 		if info.NonEmpty(k) && isZeroValue(b, jsonType(b)) {
 			return fmt.Errorf("nonempty key '%s' for struct '%s' has %s zero value", keys[k].Name, p.Type().Name(), jsonType(b))
@@ -925,6 +962,9 @@ SEARCH:
 
 		// Stop if we hit the end of the JSON
 		a := afterNextWS(raw)
+		if len(raw[a:]) == 0 {
+			return fmt.Errorf("expected }, found EOL 1")
+		}
 		if raw[a] == ',' {
 			continue SEARCH
 		}
@@ -948,14 +988,13 @@ SEARCH:
 func afterNextWS(raw []byte) int {
 	for i := 0; i < len(raw); i++ {
 		if isWS(raw[i]) {
-			if i == len(raw)-1 {
-				return i
-			}
-			return i + 1
+			continue
 		}
+
+		return i
 	}
 
-	return len(raw) - 1
+	return 0
 }
 
 func afterNextComma(raw []byte) int {
@@ -968,7 +1007,7 @@ func afterNextComma(raw []byte) int {
 		}
 	}
 
-	return len(raw) - 1
+	return afterNextWS(raw)
 }
 
 func afterNextColon(raw []byte) int {
@@ -981,29 +1020,31 @@ func afterNextColon(raw []byte) int {
 		}
 	}
 
-	return len(raw) - 1
+	return afterNextWS(raw)
 }
 
-func getKeyValue(raw []byte) ([]byte, []byte, error) {
-	kb, err := findString(raw)
+func getKeyValue(raw []byte) ([]byte, []byte, int, error) {
+	kb, kn, err := findString(raw)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
-	raw = raw[afterNextColon(raw):]
+	skip := afterNextColon(raw)
+	kn += kn - skip
+	raw = raw[skip:]
 
-	b, err := findValue(raw)
+	b, n, err := findValue(raw)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	s, e := trimWS(kb, true)
-
-	return b, kb[s:e], nil
+	return b, kb[s:e], kn + n, nil
 }
 
 // Find the next value up to a terminator
-func findValue(raw []byte) ([]byte, error) {
+// returns: Bytes Found, Number of Bytes Consumed, Error State
+func findValue(raw []byte) ([]byte, int, error) {
 	a := 0
 	for i := 0; i < len(raw); i++ {
 		if isWS(raw[i]) {
@@ -1016,58 +1057,58 @@ func findValue(raw []byte) ([]byte, error) {
 	raw = raw[a:]
 
 	if len(raw) == 0 {
-		return nil, ErrMalformedJSON
+		return nil, 0, ErrMalformedJSON
 	}
 
 	if len(raw) == 1 && raw[0] == 0 {
-		return raw, nil
+		return raw, 0, nil
 	}
 
 	switch raw[0] {
 	case '{':
-		b, err := findObject(raw)
+		b, n, err := findObject(raw)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
-		return b, nil
+		return b, n, nil
 	case '[':
-		b, err := findArray(raw)
+		b, n, err := findArray(raw)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
-		return b, nil
+		return b, n, nil
 	case '"':
-		b, err := findString(raw)
+		b, n, err := findString(raw)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
-		return b, nil
-	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		b, t := findNumber(raw)
+		return b, n, nil
+	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0':
+		b, n, t := findNumber(raw)
 		if t == JSONInvalid {
-			return nil, fmt.Errorf("expected number in segment '%s'", truncate(raw, 50))
+			return nil, 0, fmt.Errorf("expected number in segment '%s'", truncate(raw, 50))
 		}
 
-		return b, nil
+		return b, n, nil
 	case 't', 'T':
 		if len(raw) < 4 || !isJSONTrue(raw[:4]) {
-			return nil, fmt.Errorf("expected json `true` in segment '%s'", truncate(raw, 50))
+			return nil, 0, fmt.Errorf("expected json `true` in segment '%s'", truncate(raw, 50))
 		}
-		return raw[:4], nil
+		return raw[:4], 04, nil
 	case 'f', 'F':
 		if len(raw) < 5 || !isJSONFalse(raw[:5]) {
-			return nil, fmt.Errorf("expected json `false` in segment '%s'", truncate(raw, 50))
+			return nil, 0, fmt.Errorf("expected json `false` in segment '%s'", truncate(raw, 50))
 		}
-		return raw[:5], nil
+		return raw[:5], 5, nil
 	case 'n', 'N':
 		if len(raw) < 4 || !isJSONNull(raw[:4]) {
-			return nil, fmt.Errorf("expected json `null` in segment '%s'", truncate(raw, 50))
+			return nil, 0, fmt.Errorf("expected json `null` in segment '%s'", truncate(raw, 50))
 		}
-		return raw[:4], nil
+		return raw[:4], 4, nil
 	}
 
-	return nil, ErrMalformedJSON
+	return nil, 0, ErrMalformedJSON
 }

@@ -2,7 +2,6 @@ package gojson
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"testing"
 
@@ -1031,7 +1030,7 @@ func BenchmarkNewUnmarshalSlice(b *testing.B) {
 func TestNewUnmarshalMap(t *testing.T) {
 
 	t.Run("ints", func(t *testing.T) {
-		var a, b map[string]int
+		var a map[string]int
 		value := []byte(`{"a":123, "b":234, "c":345, "d":456, "e":567}`)
 		expected := map[string]int{"a": 123, "b": 234, "c": 345, "d": 456, "e": 567}
 
@@ -1039,11 +1038,11 @@ func TestNewUnmarshalMap(t *testing.T) {
 		require.Nil(t, err)
 		require.Equal(t, expected, a)
 
-		err = Unmarshal(value, &b)
-		require.Nil(t, err)
-		require.Equal(t, expected, b)
+		// err = Unmarshal(value, &b)
+		// require.Nil(t, err)
+		// require.Equal(t, expected, b)
 
-		require.Equal(t, a, b)
+		// require.Equal(t, a, b)
 
 	})
 }
@@ -1169,6 +1168,54 @@ func BenchmarkNewUnmarshalStruct(b *testing.B) {
 	})
 }
 
+func BenchmarkNewUnmarshalToIface(b *testing.B) {
+	ints := []byte(`{"a":123, "b":234, "c":345, "d":456, "e":567}`)
+
+	b.Run("Old", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			toIface(ints, JSONObject, false)
+		}
+	})
+	b.Run("New", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			jsonToIface(ints)
+		}
+	})
+}
+
+func TestFindFns(t *testing.T) {
+	t.Run("FindNumber", func(t *testing.T) {
+		raw := []byte(` 1234.56, "string"`)
+		b, n, dt := findNumber(raw)
+		require.Equal(t, JSONFloat, dt)
+		require.Equal(t, []byte(`1234.56`), b)
+		require.Equal(t, 8, n)
+		require.Equal(t, []byte(`, "string"`), raw[n:])
+
+		raw = []byte("\n\t\f\r    156, 123, \"string\"")
+		b, n, dt = findNumber(raw)
+		require.Equal(t, JSONInt, dt)
+		require.Equal(t, []byte(`156`), b)
+		require.Equal(t, 11, n)
+		require.Equal(t, []byte(`, 123, "string"`), raw[n:])
+	})
+	t.Run("FindString", func(t *testing.T) {
+		raw := []byte(` "Hello, There!", 1234.56, "string"`)
+		b, n, err := findString(raw)
+		require.Nil(t, err)
+		require.Equal(t, []byte(`"Hello, There!"`), b)
+		require.Equal(t, 16, n)
+		require.Equal(t, []byte(`, 1234.56, "string"`), raw[n:])
+
+		raw = []byte("\n\t\f\r    \"156\", 123, \"string\"")
+		b, n, err = findString(raw)
+		require.Nil(t, err)
+		require.Equal(t, []byte(`"156"`), b)
+		require.Equal(t, 13, n)
+		require.Equal(t, []byte(`, 123, "string"`), raw[n:])
+	})
+}
+
 func TestSpecial(t *testing.T) {
 	input := []byte(`{
 		"empty_string": "",
@@ -1195,6 +1242,5 @@ func TestSpecial(t *testing.T) {
 	}
 
 	require.Nil(t, Unmarshal(input, &m))
-
-	fmt.Println(m.FloatSlice)
+	require.Equal(t, []float64{-1.1, 0.0, 1.1, 2.2, 3.3}, m.FloatSlice)
 }

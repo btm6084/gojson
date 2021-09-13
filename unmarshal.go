@@ -42,10 +42,10 @@ func UnmarshalStrict(raw []byte, v interface{}) (err error) {
 
 // Unmarshal takes a json format byte string and extracts it into the given container.
 func Unmarshal(raw []byte, v interface{}) (err error) {
-	// u := unmarshaler{StrictStandards: false}
-	// return u.unmarshal(raw, v)
+	u := unmarshaler{StrictStandards: false}
+	return u.unmarshal(raw, v)
 
-	return UnmarshalJSON(raw, v)
+	// return UnmarshalJSON(raw, v)
 }
 
 type unmarshaler struct {
