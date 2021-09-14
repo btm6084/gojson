@@ -941,8 +941,25 @@ SEARCH:
 			required[k] = true
 		}
 
+		// We didn't find the key, so proceed forward.
 		if _, ok := keys[k]; !ok {
-			continue
+			// Stop if we hit the end of the JSON
+			raw = raw[n:] // Move past the consumed bytes
+			a := afterNextWS(raw)
+			if a == len(raw) {
+				return fmt.Errorf("expected }, found EOL")
+			}
+
+			raw = raw[a:]
+			switch raw[0] {
+			case ',':
+				raw = raw[1:] // Consume the comma
+				continue SEARCH
+			case '}':
+				break SEARCH
+			default:
+				return fmt.Errorf("expected ',' or '}', found '%s'", string(raw[0]))
+			}
 		}
 
 		if info.NonEmpty(k) && isZeroValue(b, jsonType(b)) {
@@ -994,7 +1011,6 @@ SEARCH:
 
 		// Stop if we hit the end of the JSON
 		raw = raw[n:] // Move past the consumed bytes
-
 		a := afterNextWS(raw)
 		if a == len(raw) {
 			return fmt.Errorf("expected }, found EOL")
