@@ -338,6 +338,9 @@ func jsonToBool(raw []byte) bool {
 }
 
 func jsonToIface(raw []byte) interface{} {
+	a, b := trimWS(raw, false)
+	raw = raw[a:b]
+
 	if len(raw) == 1 && raw[0] == '0' {
 		return int(0)
 	}
@@ -358,9 +361,13 @@ func jsonToIface(raw []byte) interface{} {
 			return false
 		}
 	case JSONObject:
-		iface := make(map[string]interface{})
+		if IsEmptyObject(raw) {
+			return nil
+		}
 
-	SEARCH:
+		iface := make(map[string]interface{})
+		raw = raw[1:] // Consume the opening brace.
+
 		for {
 			b, kb, n, err := getKeyValue(raw)
 			if err != nil {
@@ -381,9 +388,9 @@ func jsonToIface(raw []byte) interface{} {
 			switch raw[0] {
 			case ',':
 				raw = raw[1:] // Consume the comma
-				continue SEARCH
+				continue
 			case '}':
-				break SEARCH
+				return iface
 			default:
 				return fmt.Errorf("expected ',' or '}', found '%s'", string(raw[0]))
 			}
@@ -715,7 +722,9 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 			return fmt.Errorf("expected ',', found EOL")
 		}
 
-		if raw[a] != ',' {
+		raw = raw[a:]
+
+		if raw[0] != ',' {
 			return fmt.Errorf("expected ',', found '%s' in segment '%s'", string(raw[0]), truncate(raw, 50))
 		}
 
@@ -1064,16 +1073,16 @@ func getKeyValue(raw []byte) ([]byte, []byte, int, error) {
 // Find the next value up to a terminator
 // returns: Bytes Found, Number of Bytes Consumed, Error State
 func findValue(raw []byte) ([]byte, int, error) {
-	a := 0
+	trimmed := 0
 	for i := 0; i < len(raw); i++ {
 		if isWS(raw[i]) {
-			a++
+			trimmed++
 			continue
 		}
 		break
 	}
 
-	raw = raw[a:]
+	raw = raw[trimmed:]
 
 	if len(raw) == 0 {
 		return nil, 0, ErrMalformedJSON
@@ -1090,43 +1099,43 @@ func findValue(raw []byte) ([]byte, int, error) {
 			return nil, 0, err
 		}
 
-		return b, n, nil
+		return b, trimmed + n, nil
 	case '[':
 		b, n, err := findArray(raw)
 		if err != nil {
 			return nil, 0, err
 		}
 
-		return b, n, nil
+		return b, trimmed + n, nil
 	case '"':
 		b, n, err := findString(raw)
 		if err != nil {
 			return nil, 0, err
 		}
 
-		return b, n, nil
+		return b, trimmed + n, nil
 	case '-', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0':
 		b, n, t := findNumber(raw)
 		if t == JSONInvalid {
 			return nil, 0, fmt.Errorf("expected number in segment '%s'", truncate(raw, 50))
 		}
 
-		return b, n, nil
+		return b, trimmed + n, nil
 	case 't', 'T':
 		if len(raw) < 4 || !isJSONTrue(raw[:4]) {
 			return nil, 0, fmt.Errorf("expected json `true` in segment '%s'", truncate(raw, 50))
 		}
-		return raw[:4], 04, nil
+		return raw[:4], trimmed + 4, nil
 	case 'f', 'F':
 		if len(raw) < 5 || !isJSONFalse(raw[:5]) {
 			return nil, 0, fmt.Errorf("expected json `false` in segment '%s'", truncate(raw, 50))
 		}
-		return raw[:5], 5, nil
+		return raw[:5], trimmed + 5, nil
 	case 'n', 'N':
 		if len(raw) < 4 || !isJSONNull(raw[:4]) {
 			return nil, 0, fmt.Errorf("expected json `null` in segment '%s'", truncate(raw, 50))
 		}
-		return raw[:4], 4, nil
+		return raw[:4], trimmed + 4, nil
 	}
 
 	return nil, 0, ErrMalformedJSON

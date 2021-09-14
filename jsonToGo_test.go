@@ -5,6 +5,7 @@ import (
 	"log"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1165,6 +1166,20 @@ func BenchmarkNewUnmarshalStruct(b *testing.B) {
 				}
 			}
 		})
+	})
+}
+
+func TestNewUnmarshalJsonToIface(t *testing.T) {
+	t.Run("Object", func(t *testing.T) {
+		actual := jsonToIface([]byte(`{"a":123, "b":234, "c":345, "d":456, "e":567}`))
+		expected := map[string]interface{}{"a": 123, "b": 234, "c": 345, "d": 456, "e": 567}
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("Slice", func(t *testing.T) {
+		actual := jsonToIface([]byte(`[123 , 234 , 345 , 456 , 567 ]`))
+		expected := []interface{}{123, 234, 345, 456, 567}
+		assert.Equal(t, expected, actual)
 	})
 }
 
