@@ -11,6 +11,10 @@ import (
 	"github.com/spf13/cast"
 )
 
+var (
+	closers = map[string]byte{JSONObject: '}', JSONArray: ']'}
+)
+
 func isJSONTrue(b []byte) bool {
 	if len(b) < 4 {
 		return false
@@ -353,30 +357,35 @@ func jsonToIface(raw []byte) interface{} {
 		} else {
 			return false
 		}
-	case JSONObject: // @TODO: Do faster
+	case JSONObject:
 		iface := make(map[string]interface{})
 
+	SEARCH:
 		for {
 			b, kb, n, err := getKeyValue(raw)
 			if err != nil {
 				panic(err)
 			}
 
-			raw = raw[n:]
-			raw = raw[afterNextComma(raw):]
-
 			iface[string(kb)] = jsonToIface(b)
 
 			// Stop if we hit the end of the JSON
+			raw = raw[n:] // Move past the consumed bytes
+
 			a := afterNextWS(raw)
-			if len(raw[a:]) == 0 {
+			if a == len(raw) {
 				return fmt.Errorf("expected }, found EOL")
 			}
-			if raw[a] == ',' {
-				continue
-			}
-			if raw[a] == '}' {
-				return iface
+
+			raw = raw[a:]
+			switch raw[0] {
+			case ',':
+				raw = raw[1:] // Consume the comma
+				continue SEARCH
+			case '}':
+				break SEARCH
+			default:
+				return fmt.Errorf("expected ',' or '}', found '%s'", string(raw[0]))
 			}
 		}
 	case JSONArray: // @TODO: Do faster
@@ -665,9 +674,6 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 			}
 		}
 
-		raw = raw[n:]
-		raw = raw[afterNextComma(raw):]
-
 		sliceMember := slice.Index(i)
 		child := resolvePtr(sliceMember)
 
@@ -697,6 +703,24 @@ func unmarshalSlice(raw []byte, p reflect.Value) (err error) {
 		default:
 			setValue(b, child)
 		}
+
+		raw = raw[n:] // Move past the consumed bytes.
+		if i == length-1 {
+			break // We've finished extracting all the members.
+		}
+
+		// Next element must be a comma
+		a := afterNextWS(raw)
+		if a == len(raw) {
+			return fmt.Errorf("expected ',', found EOL")
+		}
+
+		if raw[a] != ',' {
+			return fmt.Errorf("expected ',', found '%s' in segment '%s'", string(raw[0]), truncate(raw, 50))
+		}
+
+		// Consume the comma
+		raw = raw[1:]
 	}
 
 	p.Set(slice)
@@ -784,9 +808,6 @@ SEARCH:
 			k = cast.ToString(i)
 		}
 
-		raw = raw[n:]
-		raw = raw[afterNextComma(raw):]
-
 		key := reflect.ValueOf(k)
 		mapElement := reflect.New(p.Type().Elem()).Elem()
 		child := resolvePtr(mapElement)
@@ -824,30 +845,33 @@ SEARCH:
 
 		i++
 
+		raw = raw[n:] // Move past the consumed bytes
 		a := afterNextWS(raw)
-		if len(raw[a:]) == 0 {
-			return fmt.Errorf("expected terminator (']', '}', ','), found EOL")
+
+		// Stop if we hit the end of the JSON
+		if a == len(raw) {
+			if t == JSONArray || t == JSONObject {
+				return fmt.Errorf("expected ',' or '%s', found EOL", string(closers[t]))
+			}
+
+			// Any other type, we hit the EOL, so all good.
+			break SEARCH
 		}
 
-		fmt.Println(string(raw))
-
+		raw = raw[a:]
 		switch t {
-		case JSONObject:
-			if raw[a] == ',' {
+		case JSONObject, JSONArray:
+			if raw[0] == ',' {
+				raw = raw[1:] // Consume the comma
 				continue SEARCH
 			}
-			if raw[a] == '}' {
+			if raw[0] == closers[t] {
 				break SEARCH
 			}
-		case JSONArray:
-			if raw[a] == ',' {
-				continue SEARCH
-			}
-			if raw[a] == ']' {
-				break SEARCH
-			}
+			return fmt.Errorf("expected ',' or '%s', found '%s' in segment '%s'", string(closers[t]), string(raw[0]), truncate(raw, 50))
 		default:
-			break SEARCH
+			// For all other types, anything other than member separator or EOL is malformed JSON.
+			return ErrMalformedJSON
 		}
 	}
 
@@ -903,9 +927,6 @@ SEARCH:
 			return gkvErr
 		}
 
-		raw = raw[n:]
-		raw = raw[afterNextComma(raw):]
-
 		k := *(*string)(unsafe.Pointer(&kb))
 		if _, isset := required[k]; isset {
 			required[k] = true
@@ -960,19 +981,27 @@ SEARCH:
 			}
 		}
 
+		count--
+
 		// Stop if we hit the end of the JSON
+		raw = raw[n:] // Move past the consumed bytes
+
 		a := afterNextWS(raw)
-		if len(raw[a:]) == 0 {
-			return fmt.Errorf("expected }, found EOL 1")
-		}
-		if raw[a] == ',' {
-			continue SEARCH
-		}
-		if raw[a] == '}' {
-			break SEARCH
+		if a == len(raw) {
+			return fmt.Errorf("expected }, found EOL")
 		}
 
-		count--
+		raw = raw[a:]
+		switch raw[0] {
+		case ',':
+			raw = raw[1:] // Consume the comma
+			continue SEARCH
+		case '}':
+			break SEARCH
+		default:
+			return fmt.Errorf("expected ',' or '}', found '%s'", string(raw[0]))
+		}
+
 	}
 
 	for _, k := range info.RequiredKeys {
@@ -994,52 +1023,42 @@ func afterNextWS(raw []byte) int {
 		return i
 	}
 
-	return 0
-}
-
-func afterNextComma(raw []byte) int {
-	for i := 0; i < len(raw); i++ {
-		if raw[i] == ',' {
-			if i == len(raw)-1 {
-				return i
-			}
-			return i + 1
-		}
-	}
-
-	return afterNextWS(raw)
-}
-
-func afterNextColon(raw []byte) int {
-	for i := 0; i < len(raw); i++ {
-		if raw[i] == ':' {
-			if i == len(raw)-1 {
-				return i
-			}
-			return i + 1
-		}
-	}
-
-	return afterNextWS(raw)
+	return len(raw)
 }
 
 func getKeyValue(raw []byte) ([]byte, []byte, int, error) {
+	consumed := 0
 	kb, kn, err := findString(raw)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	skip := afterNextColon(raw)
-	kn += kn - skip
-	raw = raw[skip:]
+	consumed += kn
+	raw = raw[consumed:]
+
+	skip := afterNextWS(raw)
+	if skip == len(raw) {
+		return nil, nil, 0, fmt.Errorf("expected ':', got EOL")
+	}
+
+	consumed += skip
+	raw = raw[skip:] // Consume any skipped whitespace
+
+	if raw[0] != ':' {
+		return nil, nil, 0, fmt.Errorf("expected ':', got %s", string(raw[0]))
+	}
+
+	raw = raw[1:]
+	consumed++
 
 	b, n, err := findValue(raw)
 	if err != nil {
 		return nil, nil, 0, err
 	}
+	consumed += n
 
 	s, e := trimWS(kb, true)
-	return b, kb[s:e], kn + n, nil
+	return b, kb[s:e], consumed, nil
 }
 
 // Find the next value up to a terminator

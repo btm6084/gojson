@@ -1216,6 +1216,24 @@ func TestFindFns(t *testing.T) {
 	})
 }
 
+func TestAfterNextWS(t *testing.T) {
+	input := []byte(` leading WS`)
+	n := afterNextWS(input)
+	require.Equal(t, 1, n)
+
+	input = []byte(` a`)
+	n = afterNextWS(input)
+	require.Equal(t, 1, n)
+
+	input = []byte(`   }`)
+	n = afterNextWS(input)
+	require.Equal(t, 3, n)
+
+	input = []byte(`     `)
+	n = afterNextWS(input)
+	require.Equal(t, len(input), n)
+}
+
 func TestSpecial(t *testing.T) {
 	input := []byte(`{
 		"empty_string": "",
