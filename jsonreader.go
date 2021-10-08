@@ -1,7 +1,6 @@
 package gojson
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -210,80 +209,67 @@ func toString(b []byte, t string, strict bool) string {
 }
 
 // manualUnescapeString unquotes a quoted string, and replaces any escaped quotes with plain quotes.
-func manualUnescapeString(b []byte) string {
-	if len(b) < 2 {
-		return marshalerDecode(b)
+func manualUnescapeString(raw []byte) string {
+	start := 0
+
+	if len(raw) < 2 {
+		return string(raw)
 	}
 
-	if b[0] != '"' || b[len(b)-1] != '"' {
-		return marshalerDecode(b)
+	// find the first non-whitespace character
+	quotedString := false
+	for i := 0; i < len(raw); i++ {
+		b := raw[i]
+
+		if isWhitespace(b) {
+			start++
+			continue
+		}
+
+		if b == '"' {
+			start++
+			quotedString = true
+		}
+
+		break
 	}
 
-	return marshalerDecode(b[1 : len(b)-1])
+	raw = raw[start:]
 
-}
+	out := make([]byte, len(raw))
 
-// Revert the HTML escaping for printable characters the encode/json Marshal performs if necessary.
-// see: https://golang.org/pkg/encoding/json/#HTMLEscape
-func marshalerDecode(b []byte) string {
-	escapes := map[byte]byte{
-		'\\': '\\',
-		'"':  '"',
-		'/':  '/',
-		'b':  '\b',
-		'f':  '\f',
-		'n':  '\n',
-		'r':  '\r',
-		't':  '\t',
-	}
+	end := 0
+	for i := 0; i < len(raw); i++ {
+		b := raw[i]
 
-	alloc := false
-	for i := 0; i < len(b); i++ {
-		if b[i] == '\\' {
-			alloc = true
+		if b != '\\' {
+			if quotedString && b == '"' {
+				break
+			}
+			out[end] = b
+			end++
+			continue
+		}
+
+		// We're done if i is the last character
+		if i == len(raw)-1 {
 			break
 		}
-	}
 
-	if !alloc {
-		return string(b)
-	}
+		c := raw[i+1]
 
-	out := make([]byte, len(b))
-	outLen := 0
-
-	for i := 0; i < len(b); i++ {
-		if b[i] != '\\' {
-			out[outLen] = b[i]
-			outLen++
-			continue
-		}
-
-		// End of String
-		if i+1 >= len(b) {
-			out[outLen] = b[i]
-			outLen++
-			continue
-		}
-
-		if c, ok := escapes[b[i+1]]; ok {
-			out[outLen] = c
-			outLen++
-			i++ // Skip past the consumed escape
-			continue
-		}
-
-		if b[i+1] == 'u' {
-			if i+5 >= len(b) {
-				out[outLen] = b[i]
-				outLen++
+		if c == 'u' {
+			if i+5 >= len(raw) {
+				out[end] = b
+				end++
 				continue
 			}
 
-			r, err := getUnicodeValue(b[i : i+6])
+			piece := raw[i+2 : i+6]
+			r, err := strconv.ParseInt(*(*string)(unsafe.Pointer(&piece)), 16, 32)
 			if err != nil {
-				out[outLen] = b[i]
-				outLen++
+				out[end] = b
+				end++
 				continue
 			}
 
@@ -291,12 +277,9 @@ func marshalerDecode(b []byte) string {
 
 			// https://unicodebook.readthedocs.io/unicode_encodings.html#utf-16-surrogate-pairs
 			// Unicode Surrogate Pair hex {D800-DBFF},{DC00-DFFF} dec {55296-56319},{56320-57343}
-			if i+11 < len(b) && (r >= 55296 && r <= 56319) {
-				r2, err := getUnicodeValue(b[i+6 : i+12])
-				if err != nil {
-					break
-				}
-
+			if i+11 < len(raw) && (r >= 55296 && r <= 56319) {
+				piece := raw[i+8 : i+12]
+				r2, _ := strconv.ParseInt(*(*string)(unsafe.Pointer(&piece)), 16, 32)
 				if r2 >= 56320 && r2 <= 57343 {
 					length = 12
 					r = ((r - 0xD800) * 0x400) + (r2 - 0xDC00) + 0x10000
@@ -304,29 +287,38 @@ func marshalerDecode(b []byte) string {
 			}
 
 			for _, bn := range []byte(string(rune(r))) {
-				out[outLen] = bn
-				outLen++
+				out[end] = bn
+				end++
 			}
 			i += length - 1 // -1 to account for the incoming i++ following the continue
 			continue
 		}
 
+		switch c {
+		case '"':
+			out[end] = '"'
+		case 'n':
+			out[end] = '\n'
+		case 't':
+			out[end] = '\t'
+		case '\\':
+			out[end] = '\\'
+		case '/':
+			out[end] = '/'
+		case 'r':
+			out[end] = '\r'
+		case 'b':
+			out[end] = '\b'
+		case 'f':
+			out[end] = '\f'
+		}
+
+		end++
+		i++
 	}
 
-	return string(out[:outLen])
-}
-
-// b should match \u[A-z0-9]{4}.
-func getUnicodeValue(b []byte) (int64, error) {
-	if len(b) < 6 {
-		return 0, errors.New("No Unicode Value")
-	}
-
-	if b[0] != '\\' || b[1] != 'u' {
-		return 0, errors.New("No Unicode Value")
-	}
-
-	return strconv.ParseInt(string(b[2:6]), 16, 32)
+	final := out[:end]
+	return *(*string)(unsafe.Pointer(&final))
 }
 
 /**
