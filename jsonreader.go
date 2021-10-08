@@ -1,7 +1,6 @@
 package gojson
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -261,7 +260,7 @@ func manualUnescapeString(raw []byte) string {
 
 		if c == 'u' {
 			if i+5 >= len(raw) {
-				out[end] = raw[i]
+				out[end] = b
 				end++
 				continue
 			}
@@ -269,7 +268,7 @@ func manualUnescapeString(raw []byte) string {
 			piece := raw[i+2 : i+6]
 			r, err := strconv.ParseInt(*(*string)(unsafe.Pointer(&piece)), 16, 32)
 			if err != nil {
-				out[end] = raw[i]
+				out[end] = b
 				end++
 				continue
 			}
@@ -280,11 +279,7 @@ func manualUnescapeString(raw []byte) string {
 			// Unicode Surrogate Pair hex {D800-DBFF},{DC00-DFFF} dec {55296-56319},{56320-57343}
 			if i+11 < len(raw) && (r >= 55296 && r <= 56319) {
 				piece := raw[i+8 : i+12]
-				r2, err := strconv.ParseInt(*(*string)(unsafe.Pointer(&piece)), 16, 32)
-				if err != nil {
-					break
-				}
-
+				r2, _ := strconv.ParseInt(*(*string)(unsafe.Pointer(&piece)), 16, 32)
 				if r2 >= 56320 && r2 <= 57343 {
 					length = 12
 					r = ((r - 0xD800) * 0x400) + (r2 - 0xDC00) + 0x10000
@@ -324,19 +319,6 @@ func manualUnescapeString(raw []byte) string {
 
 	final := out[:end]
 	return *(*string)(unsafe.Pointer(&final))
-}
-
-// b should match \u[A-z0-9]{4}.
-func getUnicodeValue(b []byte) (int64, error) {
-	if len(b) < 6 {
-		return 0, errors.New("No Unicode Value")
-	}
-
-	if b[0] != '\\' || b[1] != 'u' {
-		return 0, errors.New("No Unicode Value")
-	}
-
-	return strconv.ParseInt(string(b[2:6]), 16, 32)
 }
 
 /**
