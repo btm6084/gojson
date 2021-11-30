@@ -1622,3 +1622,18 @@ func TestUnmarshalImplicitKey(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "c", t3.DataString)
 }
+
+func TestUnmarshalKeyEncoding(t *testing.T) {
+	object := map[string]interface{}{
+		"Stuff & Things": "Junk",
+	}
+
+	raw, err := json.Marshal(object)
+	assert.Nil(t, err)
+
+	var out map[string]interface{}
+	err = Unmarshal(raw, &out)
+	assert.Nil(t, err)
+
+	assert.Equal(t, object, out)
+}
