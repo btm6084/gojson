@@ -490,7 +490,7 @@ func extractKeyValue(search []byte, start int) ([]byte, string, string, int, err
 		termErr = fmt.Errorf("expected object value terminator ('}', ']' or ',') at position '%d' in segment '%s'", start, truncate(search, 50))
 	}
 
-	return v, *(*string)(unsafe.Pointer(&key)), t, finalPos, termErr
+	return v, manualUnescapeString(key), t, finalPos, termErr
 }
 
 // Extract a key/value pair from an object, without consuming the terminator.
@@ -507,7 +507,7 @@ func extractObjectMember(search []byte, start int) ([]byte, string, string, int,
 		return nil, "", "", 0, errors.New(err.Error() + " (expected object value)")
 	}
 
-	return v, *(*string)(unsafe.Pointer(&key)), t, start, err
+	return v, manualUnescapeString(key), t, start, err
 }
 
 // Extract the next available value from an array.
