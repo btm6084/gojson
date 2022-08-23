@@ -7,6 +7,32 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestEmptyMembers(t *testing.T) {
+	patch := []byte(`{
+		"intPatch": 0,
+		"emptyStringPatch": "",
+		"emptyArrayPatch": [],
+		"emptyObjectPatch": {},
+		"objectPatch": {
+			"nestedEmptyObject": {},
+			"hello": false
+		}
+	}`)
+
+	base := []byte(`{
+		"intBase": 1,
+		"emptyStringBase":"",
+		"emptyArrayBase": [],
+		"emptyObjectBase": {},
+	}`)
+
+	out, err := MergeJSON(base, patch)
+	assert.Nil(t, err)
+	assert.True(t, IsJSON(out), string(out))
+	assert.JSONEq(t, `{"intBase":1,"emptyStringBase":"","emptyArrayBase":[],"emptyObjectBase":{},"intPatch":0,"emptyStringPatch":"","emptyArrayPatch":[],"emptyObjectPatch":{},"objectPatch":{"nestedEmptyObject":{},"hello":false}}`, string(out), string(out))
+
+}
+
 func TestMerge(t *testing.T) {
 	testCases := []struct {
 		label    string
