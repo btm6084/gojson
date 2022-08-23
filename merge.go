@@ -92,10 +92,23 @@ func toByteString(p map[string]parsed, t string, keys []string) []byte {
 		case JSONObject:
 			switch v.dtype {
 			case JSONObject, JSONArray:
+				if IsEmptyObject(v.bytes) {
+					buf.WriteString(`"` + k + `":{}`)
+					contents[i] = buf.String()
+					break
+				}
+				if IsEmptyArray(v.bytes) {
+					buf.WriteString(`"` + k + `":[]`)
+					contents[i] = buf.String()
+					break
+				}
+
 				b := toByteString(v.children, v.dtype, v.keys)
 				if b == nil {
+					// Skip this key.
 					continue
 				}
+
 				buf.WriteString(`"` + k + `":` + string(b))
 				contents[i] = buf.String()
 			case JSONString:
@@ -109,10 +122,23 @@ func toByteString(p map[string]parsed, t string, keys []string) []byte {
 		case JSONArray:
 			switch v.dtype {
 			case JSONObject, JSONArray:
+				if IsEmptyObject(v.bytes) {
+					buf.WriteString(`{}`)
+					contents[i] = buf.String()
+					break
+				}
+				if IsEmptyArray(v.bytes) {
+					buf.WriteString(`[]`)
+					contents[i] = buf.String()
+					break
+				}
+
 				b := toByteString(v.children, v.dtype, v.keys)
 				if b == nil {
+					// Skip this key.
 					continue
 				}
+
 				buf.WriteString(string(b))
 				contents[i] = buf.String()
 			case JSONString:
