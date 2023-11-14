@@ -314,7 +314,7 @@ func TestExtract(t *testing.T) {
 		v, dt, err := Extract([]byte(largeJSONTestBlob), "things.stuff")
 		assert.Equal(t, []byte(nil), v)
 		assert.Equal(t, "", dt)
-		assert.Equal(t, "requested key 'things.stuff' doesn't exist", err.Error())
+		assert.Equal(t, "key 'things.stuff' not found", err.Error())
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
@@ -517,7 +517,7 @@ func TestExtractKeyPath(t *testing.T) {
 		assert.Equal(t, []byte(nil), v)
 		assert.Equal(t, "", dt)
 		assert.Equal(t, 0, k)
-		assert.Equal(t, `expected object key at position 1 in segment '{key: "value"}'`, err.Error())
+		assert.Equal(t, `key 'key' not found`, err.Error())
 	})
 
 	t.Run("Array with invalid JSON", func(t *testing.T) {
@@ -533,7 +533,7 @@ func TestExtractKeyPath(t *testing.T) {
 		assert.Equal(t, []byte(nil), v)
 		assert.Equal(t, "", dt)
 		assert.Equal(t, 0, k)
-		assert.Equal(t, `requested key 'is not key' doesn't exist`, err.Error())
+		assert.Equal(t, `key 'is not key' not found`, err.Error())
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
@@ -692,4 +692,11 @@ func TestExtractKeysWithPeriods(t *testing.T) {
 
 	_, _, err = Extract(input, "users2.cde@example\\.com")
 	require.Error(t, err)
+}
+
+func TestExtractMissingKey(t *testing.T) {
+	input := []byte(`{"errorCode":1010002,"errorMessage":"not found"}\n`)
+	_, _, err := Extract(input, "result")
+
+	require.Equal(t, "key 'result' not found", err.Error())
 }

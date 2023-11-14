@@ -13,25 +13,29 @@ import (
 //
 // Key Path Values:
 // String, Number, and Constant not in a surrounding array or object will always
-//     return the root, regardless of the key given.
+//
+//	return the root, regardless of the key given.
+//
 // Arrays will index from 0.
 // Objects will will index as they are keyed.
 // Empty key will always return whatever is at the root.
 // Path is a period separated list of keys.
 //
 // Examples:
-// data := []byte(`{
-// 	"active": 0,
-// 	"url": "http://www.example.com",
-// 	"metadata": {
-// 		"keywords": [
-// 			"example",
-// 			"sample",
-// 			"illustration",
-// 		],
-// 		"error_code": 0
-// 	}
-// }`)
+//
+//	data := []byte(`{
+//		"active": 0,
+//		"url": "http://www.example.com",
+//		"metadata": {
+//			"keywords": [
+//				"example",
+//				"sample",
+//				"illustration",
+//			],
+//			"error_code": 0
+//		}
+//	}`)
+//
 // Extract(data, "active") returns 0, "int", nil
 // Extract(data, "url") returns "http://www.example.com", "string", nil
 // Extract(data, "metadata.keywords.1") returns []byte(`"sample"`), "string", nil
@@ -241,7 +245,7 @@ func extractKeyPath(search []byte, path string) ([]byte, string, int, error) {
 			for start <= len(search)-1 {
 				key, pos, err := extractKey(search, start)
 				if err != nil {
-					return nil, "", 0, err
+					return nil, "", 0, fmt.Errorf("key '%s' not found", path)
 				}
 
 				if k == *(*string)(unsafe.Pointer(&key)) {
@@ -287,7 +291,7 @@ func extractKeyPath(search []byte, path string) ([]byte, string, int, error) {
 		return extractValue(search, start)
 	}
 
-	return nil, "", 0, fmt.Errorf("requested key '%s' doesn't exist", path)
+	return nil, "", 0, fmt.Errorf("key '%s' not found", path)
 }
 
 // Extract a key from a JSONObject.
