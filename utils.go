@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-func Indent(b []byte) bytes.Buffer {
+func Indent(b []byte) *bytes.Buffer {
 	var i bytes.Buffer
 	json.Indent(&i, b, "", "\t")
-	return i
+	return &i
 }
 
 // PanicRecovery returns a general use Panic Recovery function to capture panics
