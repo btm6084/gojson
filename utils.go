@@ -2,10 +2,17 @@ package gojson
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"runtime/debug"
 	"strings"
 )
+
+func Indent(b []byte) bytes.Buffer {
+	var i bytes.Buffer
+	json.Indent(&i, b, "", "\t")
+	return i
+}
 
 // PanicRecovery returns a general use Panic Recovery function to capture panics
 // and returns them as errors. A pointer to the error to populate will be passed
